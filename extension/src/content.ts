@@ -19,13 +19,6 @@ function getSelectedText(): string {
   return window.getSelection()?.toString() ?? "";
 }
 
-type TracePilotRequest={
-    type: "trace-pilot";
-}
-
-type TracePilotResponse=
-    | {selectionText: string;}
-    | {error:string};
 
 
 chrome.runtime.onMessage.addListener(

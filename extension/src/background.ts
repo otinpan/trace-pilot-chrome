@@ -29,7 +29,7 @@ function onClickHandler(
     info: chrome.contextMenus.OnClickData,
     tab?: chrome.tabs.Tab
 ){
-    if(info.menuItemId!=="hash_and_store_pdf")return;
+    if(info.menuItemId!=="create_hash_and_store_pdf")return;
 
     chrome.tabs.query({active:true,currentWindow:true},(tabs)=>{
         const tab0=tabs[0];
@@ -77,8 +77,6 @@ function onClickHandler(
 
         console.log("resolved pdf url =", url);
 
-        // content script に問い合わせ（レスポンス型を付ける）
-        type TracePilotResponse = { selectionText: string } | { error: string };
 
         chrome.tabs.sendMessage(
           tabId,
