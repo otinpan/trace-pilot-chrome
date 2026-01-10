@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "trace-pilot",
+  "version": "1.0",
+  "description": "trace-pilot",
+
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "contextMenus"
+  ],
+
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+
+  "action": {
+    "default_popup": "popup.html"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "*://dl.acm.org/*"
+    ],
+      "js": ["dist/content.js"]
+    }
+  ]
+}
