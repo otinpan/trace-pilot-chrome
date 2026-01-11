@@ -7,20 +7,41 @@ chrome.runtime.onInstalled.addListener(function () {
         id: "create_hash_and_store_pdf",
     });
 });
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log("background received message:", message);
+// messsageが到達したら=>の中身を実行
+/*chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
+    console.log("background received message:",message);
     console.log("==sender object==");
     console.log(sender);
-    if (message.type == "PING") {
-        sendResponse({ type: "PONG" });
+
+    if(message.type=="PING"){
+        sendResponse({type: "PONG"});
     }
-    else if (message.type == "COPY_EVENT") {
-        setTimeout(() => {
-            sendResponse({ type: "COPY_RECORDED", text: message.text });
-        }, 100);
+    else if(message.type=="COPY_EVENT"){
+        setTimeout(()=>{
+            sendResponse({type: "COPY_RECORDED",text: message.text});
+        },100);
         return true;
     }
-});
+});*/
+const NATIVE_HOST_NAME = "trace_pilot_host_chrome";
+// native messagingでネイティブホストにメッセージを送る
+// 返ってきたらonResponseを呼ぶ
+function sendMessageToNativeHost(message, onResponse, onError) {
+    chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
+        const err = chrome.runtime.lastError;
+        if (err) {
+            const msg = err.message || "Unknown native messaging error";
+            if (onError) {
+                onError(msg);
+            }
+            else {
+                console.error("Native messaging eror:", msg);
+            }
+            return;
+        }
+        onResponse(res);
+    });
+}
 // chromeではpdfのコピーはフック出来ない
 // ユーザーはctr+cでコピーした後にコンテキストメニューを使い保存する
 function onClickHandler(info, tab) {
@@ -65,7 +86,12 @@ function onClickHandler(info, tab) {
             }
             url = url.substring(i + 1);
         }
+        let isPdf = false;
+        if (url.includes("pdf")) {
+            isPdf = true;
+        }
         console.log("resolved pdf url =", url);
+        console.log(`is Pdf = ${isPdf}`);
         chrome.tabs.sendMessage(tabId, { type: "trace-pilot" }, (res) => {
             if (chrome.runtime.lastError) {
                 console.error("sendMessage failed:", chrome.runtime.lastError.message);
@@ -78,8 +104,23 @@ function onClickHandler(info, tab) {
                 return;
             }
             const plainText = res.selectionText;
+            // metadataに必要なものを送信する (fulltextはapp側でurlから再現する)
+            // url
+            // plane text
+            sendURLAndPlainText(url, plainText, isPdf);
             console.log("received selection text:", plainText);
         });
+    });
+}
+function sendURLAndPlainText(url, plainText, isPdf) {
+    sendMessageToNativeHost({
+        url,
+        plainText,
+        isPdf,
+    }, (res) => {
+        console.log("received from native:", res);
+    }, (err) => {
+        console.error("Failed to talk to native app:", err);
     });
 }
 // クリックイベントに登録

@@ -8,8 +8,11 @@
     "storage",
     "activeTab",
     "scripting",
-    "contextMenus"
+    "contextMenus",
+    "nativeMessaging"
   ],
+
+  "host_permisssions":["<all_urls>"],
 
   "background": {
     "service_worker": "dist/background.js"
@@ -22,9 +25,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*/*",
-        "*://dl.acm.org/*"
-    ],
+        "<all_urls>"
+      ],
       "js": ["dist/content.js"]
     }
   ]
