@@ -1,17 +1,8 @@
-export enum COMMANDS {
-  GOOGLE_OPEN = 'googleOpen',
-  STACKOVERFLOW_OPEN = 'stackoverflowOpen',
-  GITHUB_OPEN = 'githubOpen',
-  CHAT_OPEN = 'chatOpen',
-  OTHER_OPEN = 'otherOpen',
-  GOOGLE_SEARCH = 'googleSearch',
-  PDF_OPEN='pdfOpen'
-}
-
-
+import { GenericEvent } from "../type";
+import { COMMANDS } from "../type";
 
 class GenericListener{
-    constructor(){
+    constructor(private onEvent:(ev:GenericEvent)=>void){
         this.init();
     }
 
@@ -23,7 +14,6 @@ class GenericListener{
         chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             const url = tab.url;
             if (!url || changeInfo.status !== "complete") return;
-            
             
             const isPdf=isLikelyPdfUrl(url);
           
@@ -40,11 +30,9 @@ class GenericListener{
             } else if (url.startsWith("https://github.com")) {
                 command = COMMANDS.GITHUB_OPEN;
             }
-          
-            chrome.tabs.sendMessage(tabId, {
-                command,
-                payload: { url, title: tab.title },
-            });
+
+            this.onEvent({ command, tabId, url, title: tab.title });
+            
         });
     }       
 

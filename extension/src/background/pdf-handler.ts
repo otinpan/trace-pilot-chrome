@@ -1,5 +1,6 @@
-import { COMMANDS } from "./generic-listener";
+import { COMMANDS,GenericEvent,MessageToNativeHost, WEB_INFO_SOURCE,TRACE_PILOT_MARKER } from "../type";
 import { Handler } from "./handler";
+
 
 const MENU_ID="create_hash_and_store";
 const NATIVE_HOST_NAME="trace_pilot_host_chrome";
@@ -14,47 +15,33 @@ type PdfState={
 
 export class PdfHandler extends Handler {
     private lastPdf: PdfState|null=null;
+    private lastPlainText: string="";
     private msgInstalled=false;
     constructor(){
         super(MENU_ID);
-        this.initMessageListener();
-
     }
 
-    private initMessageListener(){
-        if(this.msgInstalled)return;
-        this.msgInstalled=true;
+    public onGenericEvent(ev: GenericEvent){
+        if(ev.command===COMMANDS.PDF_OPEN){
+            if(!ev.url)return;
 
-        chrome.runtime.onMessage.addListener((msg,sender)=>{
-            if(!msg||typeof msg!=="object")return;
-
-            const {command,payload}=msg as{
-                command?: COMMANDS;
-                payload?: {url?:string; title?: string};
-            };
-
-            const tabId=sender.tab?.id;
-            if(typeof tabId!=="number")return;
-
-            if(command===COMMANDS.PDF_OPEN){
-                const url=payload?.url ?? "";
-                if(!url)return;
-
-                this.lastPdf={
-                    tabId,
-                    url,
-                    title:payload?.title,
-                    isPdf: true,
-                    updatedAt: Date.now(),
-                };
-
-                this.setEnabled(true);
-            }else{
-                this.setEnabled(false);
+            this.lastPdf={
+                tabId: ev.tabId,
+                url: ev.url,
+                title: ev.title,
+                isPdf: true,
+                updatedAt: Date.now(),
             }
-        });
+            
+            this.setEnabled(true);
+        }else{
+            this.setEnabled(false);
+        }
     }
 
+    
+
+    // クリックされたとき
     protected override async onMenuClick(
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab
@@ -68,43 +55,46 @@ export class PdfHandler extends Handler {
 
         const { url, isPdf } = resolvePdfUrl(rawUrl);
 
-        const res=await sendMessageToTab(tabId,{type:"trace-pilot"});
-        if(!res)return;
-
-        if("error" in res){
-            console.error("trace-pilot error:", res.error);
+        let plainText=info.selectionText;
+        if(plainText===undefined){
             return;
         }
+        this.lastPlainText=plainText;
 
-        const plainText=res.selectionText as string;
-        await this.sendToNativeHost({url,plainText,isPdf});
+        console.log("selected text: ",plainText);
+
+        const msg:MessageToNativeHost={
+            url,
+            plain_text:plainText,
+            is_pdf: true,
+            web_type: WEB_INFO_SOURCE.PDF,
+            additional_data:{kind:"NONE"},
+        }
+        let res=await this.sendToNativeHost(msg);
+        const metaHash=res.metaHash;
+
+        // クリップボードに貼る文字列
+        const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
+        const clipboardText = `${marker}\n${plainText}`;
+
+        await writeClipboardViaContent(tab.id!, clipboardText);
     }
 
     private sendToNativeHost(message: any):Promise<any>{
         return new Promise((resolve,reject)=>{
+            console.log("send message to native host: ",message);
             chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res)=>{
                 const err=chrome.runtime.lastError;
                 if(err)return reject(err.message||String(err));
+                console.log("succcess",res);
                 resolve(res);
             })
         })
     }
 }
 
-function sendMessageToTab(tabId: number, msg: any): Promise<any> {
-    return new Promise((resolve) => {
-        chrome.tabs.sendMessage(tabId, msg, (res) => {
-        if (chrome.runtime.lastError) {
-            console.error("sendMessage failed:", chrome.runtime.lastError.message);
-            resolve(undefined);
-            return;
-        }
-        resolve(res);
-        });
-    });
-}
 
-// URL解決（そのまま）
+// PDFのurlを読み取れる形に変形
 function resolvePdfUrl(tabUrl: string): { url: string; isPdf: boolean } {
     let url = tabUrl;
 
@@ -140,4 +130,17 @@ function isLikelyPdfUrl(raw: string): boolean {
     } catch {
         return raw.toLowerCase().includes(".pdf");
     }
+}
+
+// background / service worker 側
+async function writeClipboardViaContent(tabId: number, text: string) {
+  // content script にメッセージ送信
+  const res = await chrome.tabs.sendMessage(tabId, {
+    kind: "TRACE_PILOT_WRITE_CLIPBOARD",
+    text,
+  });
+
+  if (!res?.ok) {
+    throw new Error(res?.error ?? "clipboard write failed");
+  }
 }

@@ -1,6 +1,3 @@
-import { COMMANDS} from "./generic-listener";
-
-
 export abstract class Handler{
     private installed=false;
     constructor(
@@ -16,6 +13,7 @@ export abstract class Handler{
         chrome.contextMenus.onClicked.addListener(this.onClick);
     }
 
+    // 拡張機能で作成した右クリックメニューを有効・無効
     protected setEnabled(enabled: boolean) {
         chrome.contextMenus.update(this.menuId, { enabled }, () => void chrome.runtime.lastError);
     }
@@ -30,10 +28,10 @@ export abstract class Handler{
             this.onClickMissingTab(info,tab);
             return;
         }
-
         void this.onMenuClick(info,tab);
     }
 
+    // クリックされたときの
     protected abstract onMenuClick(
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab

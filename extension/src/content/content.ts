@@ -1,3 +1,4 @@
+import { TracePilotResponse } from "../type";
 
 chrome.runtime.sendMessage(
     {type:"PING"},
@@ -19,7 +20,6 @@ function getSelectedText(): string {
   // 通常ページの選択
   return window.getSelection()?.toString() ?? "";
 }
-
 
 
 chrome.runtime.onMessage.addListener(
@@ -51,4 +51,19 @@ chrome.runtime.onMessage.addListener(
 )
 
 
-new PdfHandler();
+
+// content script 側
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.kind !== "TRACE_PILOT_WRITE_CLIPBOARD") return;
+
+  (async () => {
+    try {
+      await navigator.clipboard.writeText(msg.text);
+      sendResponse({ ok: true });
+    } catch (e) {
+      sendResponse({ ok: false, error: String(e) });
+    }
+  })();
+
+  return true; // async sendResponse のため必須
+});

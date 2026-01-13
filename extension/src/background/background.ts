@@ -1,8 +1,17 @@
 import GenericListener from "./generic-listener";
 import { PdfHandler } from "./pdf-handler";
 
-new GenericListener();
-new PdfHandler();
+const pdfHandler = new PdfHandler();
+new GenericListener((ev) => pdfHandler.onGenericEvent(ev));
+
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && typeof msg === "object" && (msg as any).type === "PING") {
+    sendResponse({ ok: true, from: "background" });
+    console.log("first message is sccessed!");
+    return; // sync reply
+  }
+});
 
 chrome.runtime.onInstalled.addListener(()=>{
     chrome.contextMenus.create({
@@ -13,3 +22,5 @@ chrome.runtime.onInstalled.addListener(()=>{
         enabled: false
     });
 });
+
+
