@@ -135,6 +135,7 @@ fn ensure_worktree(repo: &Path)->Result<()>{
     let worktree_dir=repo.join(".trace-worktree");
 
     if worktree_dir.exists(){
+        ensure_gitignore(repo)?;
         return Ok(());
     }
 

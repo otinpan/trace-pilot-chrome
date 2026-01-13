@@ -1,3 +1,4 @@
+
 chrome.runtime.sendMessage(
     {type:"PING"},
     (response)=>{
@@ -48,3 +49,6 @@ chrome.runtime.onMessage.addListener(
         return true;
     }
 )
+
+
+new PdfHandler();
