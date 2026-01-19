@@ -1,16 +1,22 @@
 import GenericListener from "./generic-listener";
-import { PdfHandler } from "./pdf-handler";
+import GPTHandler from "./gpt-module/gpt-handler";
+import { PdfHandler } from "./pdf-module/pdf-handler";
+
+const genericListener = new GenericListener();
 
 const pdfHandler = new PdfHandler();
-new GenericListener((ev) => pdfHandler.onGenericEvent(ev));
+genericListener.addHandler((ev) => pdfHandler.onGenericEvent(ev));
+
+const gptHandler = new GPTHandler();
+genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
 
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg && typeof msg === "object" && (msg as any).type === "PING") {
-    sendResponse({ ok: true, from: "background" });
-    console.log("first message is sccessed!");
-    return; // sync reply
-  }
+    if (msg && typeof msg === "object" && (msg as any).type === "PING") {
+      sendResponse({ ok: true, from: "background" });
+      console.log("first message is sccessed!");
+      return; // sync reply
+    }
 });
 
 chrome.runtime.onInstalled.addListener(()=>{

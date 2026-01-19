@@ -1,5 +1,5 @@
-import { COMMANDS,GenericEvent,MessageToNativeHost, WEB_INFO_SOURCE,TRACE_PILOT_MARKER } from "../type";
-import { Handler } from "./handler";
+import { COMMANDS,GenericEvent,MessageToNativeHost, WEB_INFO_SOURCE,TRACE_PILOT_MARKER } from "../../type";
+import { Handler } from "../handler";
 
 
 const MENU_ID="create_hash_and_store";
@@ -16,7 +16,6 @@ type PdfState={
 export class PdfHandler extends Handler {
     private lastPdf: PdfState|null=null;
     private lastPlainText: string="";
-    private msgInstalled=false;
     constructor(){
         super(MENU_ID);
     }
@@ -132,9 +131,22 @@ function isLikelyPdfUrl(raw: string): boolean {
     }
 }
 
+async function focusTabAndWindow(tabId: number) {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.windowId != null) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+    }
+    await chrome.tabs.update(tabId, { active: true });
+
+    // 少し待つ（フォーカス反映待ち）
+    await new Promise((r) => setTimeout(r, 50));
+}
+
 // background / service worker 側
 async function writeClipboardViaContent(tabId: number, text: string) {
-  // content script にメッセージ送信
+   await focusTabAndWindow(tabId);
+
+    // content script にメッセージ送信
   const res = await chrome.tabs.sendMessage(tabId, {
     kind: "TRACE_PILOT_WRITE_CLIPBOARD",
     text,
@@ -144,3 +156,6 @@ async function writeClipboardViaContent(tabId: number, text: string) {
     throw new Error(res?.error ?? "clipboard write failed");
   }
 }
+
+
+

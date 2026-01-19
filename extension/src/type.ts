@@ -12,7 +12,7 @@ export enum COMMANDS {
   GOOGLE_OPEN = 'googleOpen',
   STACKOVERFLOW_OPEN = 'stackoverflowOpen',
   GITHUB_OPEN = 'githubOpen',
-  CHAT_OPEN = 'chatOpen',
+  GPT_OPEN = 'chatOpen',
   OTHER_OPEN = 'otherOpen',
   GOOGLE_SEARCH = 'googleSearch',
   PDF_OPEN='pdfOpen'
@@ -41,4 +41,5 @@ export enum WEB_INFO_SOURCE{
 
 export type AdditionalData=
 | {kind:"NONE"}
+
 

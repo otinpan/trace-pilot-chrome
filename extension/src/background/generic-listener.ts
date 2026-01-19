@@ -1,8 +1,12 @@
 import { GenericEvent } from "../type";
 import { COMMANDS } from "../type";
 
-class GenericListener{
-    constructor(private onEvent:(ev:GenericEvent)=>void){
+type GenericEventHandler = (ev: GenericEvent) => void;
+
+export class GenericListener{
+    private handlers : Set<GenericEventHandler> = new Set();
+    constructor(onEvent?: GenericEventHandler){
+        if(onEvent)this.handlers.add(onEvent);
         this.init();
     }
 
@@ -10,6 +14,24 @@ class GenericListener{
         this.listen();
     }
 
+    addHandler(handler:GenericEventHandler):()=>void{
+        this.handlers.add(handler);
+        return ()=>this.removeHandler(handler);
+    }
+
+    removeHandler(handler:GenericEventHandler):void{
+        this.handlers.delete(handler);
+    }
+
+    private emit(ev:GenericEvent):void{
+        for(const h of this.handlers){
+            try{
+                h(ev);
+            }catch(e){
+                console.error("GenericListener handelr error:",e,"event",ev);
+            }
+        }
+    }
     listen() {
         chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             const url = tab.url;
@@ -22,7 +44,7 @@ class GenericListener{
             if (isPdf) {
                 command = COMMANDS.PDF_OPEN;
             } else if (url.includes("chatgpt.com")) {
-                command = COMMANDS.CHAT_OPEN;
+                command = COMMANDS.GPT_OPEN;
             } else if (url.startsWith("https://www.google.com/")) {
                 command = COMMANDS.GOOGLE_OPEN;
             } else if (url.startsWith("https://stackoverflow.com")) {
@@ -31,7 +53,7 @@ class GenericListener{
                 command = COMMANDS.GITHUB_OPEN;
             }
 
-            this.onEvent({ command, tabId, url, title: tab.title });
+            this.emit({ command, tabId, url, title: tab.title });
             
         });
     }       

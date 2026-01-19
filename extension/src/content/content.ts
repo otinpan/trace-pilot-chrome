@@ -1,4 +1,7 @@
 import { TracePilotResponse } from "../type";
+import { GPTListener } from "./gpt-module/gpt-listener";
+
+const gptListener=new GPTListener();
 
 chrome.runtime.sendMessage(
     {type:"PING"},
@@ -67,3 +70,4 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   return true; // async sendResponse のため必須
 });
+
