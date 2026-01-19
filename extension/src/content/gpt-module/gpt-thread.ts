@@ -35,7 +35,7 @@ const SELECTORS = {
 export class GPTThread{
     private observer: MutationObserver |null=null; // 新しいメッセージが追加されたか
     private threadItems: ThreadPair[]=[]; // スレッド内の履歴データ
-    private botRef: HTMLElement | null=null; // 生成中のBotメッセージのDOM要素
+    private assistantTurnRef: HTMLElement|null=null;
     private userRef: HTMLElement | null=null; // 対応するユーザー発言のDOM要素
     private tempUserMessage: string| null=null; // ユーザーがtextエリアに入力中のテキスト
     private tempPair: ThreadPair | null=null; // 現在生成中のThreadPair
@@ -137,36 +137,33 @@ export class GPTThread{
         console.log("tempUserMessage:",this.tempUserMessage);
     }
 
+    private getUserElFromTurn(turn:HTMLElement):HTMLElement|null{
+        return turn.querySelector('[data-message-author-role="user"]') as HTMLElement | null;
+    }
+
+    private findNextAssistantTurn(fromTurn: HTMLElement): HTMLElement | null{
+        let cur:Element | null=fromTurn.nextElementSibling;
+        for(let i=0;i<8&&cur;i++){
+            if(cur instanceof HTMLElement){
+                const hasAssistant = !!cur.querySelector('[data-message-author-role="assistant"]');
+                if (hasAssistant) {
+                    console.log(cur);
+                    return cur;
+                }
+            }
+
+            cur=cur.nextElementSibling;
+        }
+
+        return null;
+    }
+
+
     handleMessages: MutationCallback=(
         mutationList: MutationRecord[],
         observer:MutationObserver
     )=>{
         if(!mutationList.length)return;
-        console.log("handleMessages fires:",mutationList.length);
-
-        for(const m of mutationList){
-            const nodes=Array.from(m.addedNodes);
-            const hasTextNode=nodes.some(n=>n.nodeType===Node.TEXT_NODE);
-            /*if(hasTextNode){
-                const ok=nodes.some((n)=>{
-                    const el=n.nodeType===Node.ELEMENT_NODE
-                    ?(n as Element)
-                    :(n.parentElement as Element|null);
-                    if(!el)return false;
-
-                    console.log(el);
-                    const turn = el.closest('article[data-testid^="conversation-turn-"]') as HTMLElement | null;
-                    if(!turn)return false;
-
-                    const userText=this.extractUserText(turn);
-                    //console.log("userText:",userText);
-                    return userText.length>0;
-                });
-
-                //console.log("convert to extractUserText:",ok);
-            }*/
-        }
-
 
         const msg=this.tempUserMessage;
         if(!msg||msg.length===0){
@@ -174,38 +171,45 @@ export class GPTThread{
             return;
         }
 
-        console.log("user message from textarea:",msg);
-        
-        mutationList.forEach((mutation)=>{
-            if(
-                // ノードが追加された
-                mutation.addedNodes&& 
-                mutation.addedNodes.length>0&&
-                Array.from(mutation.addedNodes).some( // 追加されたノードの中にユーザーが入力した内容があるか
-                    (n)=>
-                    (n as HTMLElement).innerText===this.tempUserMessage &&
-                    this.tempUserMessage.length
-                )
-            ){
-                console.log("mutation",mutation);
-                const addedNodes=Array.from(mutation.addedNodes);
-                const nodeWithMessage=addedNodes.find(
-                    (n)=>
-                    (n as HTMLElement).innerText===this.tempUserMessage&&
-                    this.tempUserMessage.length
-                ) as HTMLElement;
+        for(const mutation of mutationList){
+            const addedNodes=Array.from(mutation.addedNodes);
+            for(const node of addedNodes){
+                const el=
+                    node.nodeType===Node.ELEMENT_NODE
+                    ?(node as HTMLElement)
+                    :node.parentElement;
 
-                if(nodeWithMessage){
-                    this.userRef=nodeWithMessage;
-                    this.botRef=nodeWithMessage.nextSibling as HTMLElement;
 
-                    // botの出力を監視するobserverの起動
+                if(!el)continue;
+
+                const turn = el.closest('article[data-testid^="conversation-turn-"]') as HTMLElement | null;
+
+                if(!turn){
+                    console.log("el.closest(article)=null, el HTML:", el.outerHTML?.slice(0, 200));
+                    continue;
+                }
+
+                const extracted=this.extractUserText(turn);
+                if(extracted&&extracted===this.tempUserMessage){
+                    console.log("ysessss");
+                    // tempUserMessageと同じテキストを含むnodeが見つかった
+                    this.userRef=this.getUserElFromTurn(turn);
+
+                    const assistantTurn=this.findNextAssistantTurn(turn);
+                    if(!assistantTurn){
+                        console.log("assistant turn not found yet");
+                        return;
+                    }
+
+                    this.assistantTurnRef=assistantTurn;
+
+                    this.botObserver?.disconnect();
                     this.botObserver=new MutationObserver((mutations,observer)=>{
                         this.addToThread(mutations,observer)
                     });
 
                     this.botObserver.observe(
-                        nodeWithMessage.nextSibling as HTMLElement,
+                        assistantTurn,
                         {
                             childList:true,
                             subtree: true,
@@ -214,12 +218,12 @@ export class GPTThread{
                     );
                 }
             }
-        });
+        }
     }
 
     private reset(){
         this.userRef=null;
-        this.botRef=null;
+        this.assistantTurnRef=null;
         this.tempPair=null;
         this.tempUserMessage=null;
         this.botObserver?.disconnect();
@@ -258,10 +262,14 @@ export class GPTThread{
             );
 
             // threadItemsに追加するプロンプトと生成物のペア
+            const botText = this.assistantTurnRef
+                ? this.extractAssistantText(this.assistantTurnRef)
+                : "";
+            console.log("bot text:",botText);
             this.tempPair={
                 ...this.tempPair,
                 userMessage:this.userRef?.innerText || '',
-                botResponse: this.botRef?.innerText || '',
+                botResponse: botText,
                 id: this.tempPair?.id || new Date().getTime().toString(),
                 time: this.tempPair?.time || new Date().getTime(),
                 codeBlocks: codeBlocks || [],
@@ -287,11 +295,20 @@ export class GPTThread{
     }
 
     private extractAssistantText(turn: HTMLElement):string{
-        return(
-             turn.querySelector('[data-message-author-role="assistant"] .markdown')
-             ?.textContent?.trim()
-            ?? ""
+        const assistants=Array.from(
+            turn.querySelectorAll<HTMLElement>('[data-message-author-role="assistant"]')
         );
+
+        const real=assistants.find((el)=>{
+            const mid=el.getAttribute("data-message-id")||"";
+            if (mid.startsWith("placeholder-request-")) return false;
+
+            const md=el.querySelector(".markdown");
+            return !!md && (md.textContent?.trim().length ?? 0)>0;
+        });
+
+        const md = real?.querySelector(".markdown") as HTMLElement | null;
+        return md?.textContent ?? real?.innerText ?? "";
     }
 
     private initThreadItems(container: HTMLElement){
