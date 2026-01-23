@@ -118,17 +118,23 @@ async fn hash_and_store_pdf(url:String,plain_text:String,is_pdf:bool)->Result<St
 
     let meta = types::Metadata {
         originalHash: original_hash,
-        fullTextHash: full_text_hash,
+        additionalHash: Some(
+            types::AdditionalHash::ChromePDFHash(
+                types::ChromePDFHash{
+                    fullTextHash: full_text_hash,
+                }
+            )
+        ),
         url,
 
-        r#type: types::WebInfoSource::Other,
+        r#type: types::WebInfoSource::ChromePDF,
 
         timeCopied: Utc::now().to_rfc3339(),
         timeCopiedNumber: Utc::now().timestamp_millis(),
 
         additionalMetaData: Some(
-            types::AdditionalMetadata::VSCodeCopyMedia(
-                types::VSCodeCopyMedia {
+            types::AdditionalMetadata::ChromePDFMetadata(
+                types::ChromePDFMetadata {
                     isText: false,
                 }
             )

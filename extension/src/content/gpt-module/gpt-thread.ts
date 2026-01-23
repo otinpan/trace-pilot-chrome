@@ -7,7 +7,7 @@ export function debounce(func: Function, timeout = 300) {
     };
 }
 
-interface ThreadPair{
+export interface ThreadPair{
     id:string;
     time: number;
     userMessage: string;
@@ -21,26 +21,28 @@ interface CodeBlock{
     copied: boolean;
     surroundingText: string;
     language: string;
-    parentId: string;
+    parentId: string; // ThreadPair.id
+    turnParentId: string; // assistant turnの data-message-id/data-testid
 }
 
-// chatgptのページのUIに依存
-const SELECTORS = {
-  THREAD_CONTAINER: 'flex flex-col text-sm pb-25',
-  TEXTAREA: '#prompt-textarea',
-  COPY_TEXT: 'Copy code',
-  COPIED_TEXT: 'Copied!',
+interface LastTarget{
+    parentId: string;
+    preIndex: number|null;
+    updatedAt: number;
 }
+
 
 export class GPTThread{
     private observer: MutationObserver |null=null; // 新しいメッセージが追加されたか
-    private threadItems: ThreadPair[]=[]; // スレッド内の履歴データ
+    private threadItems= new Map<string,ThreadPair> () // スレッド内の履歴データ
     private assistantTurnRef: HTMLElement|null=null;
     private userRef: HTMLElement | null=null; // 対応するユーザー発言のDOM要素
     private tempUserMessage: string| null=null; // ユーザーがtextエリアに入力中のテキスト
     private tempPair: ThreadPair | null=null; // 現在生成中のThreadPair
     private lastEditedTime: ReturnType<typeof setTimeout> | null=null; // Botの出力が止まったことを検出
     private botObserver: MutationObserver | null=null;
+    private lastTarget: LastTarget | null=null;
+
 
     constructor(readonly id:string,readonly title:string){
         this.init();
@@ -48,8 +50,10 @@ export class GPTThread{
 
     init(){
         this.initPageObserver();
+        this.initListener();
     }
 
+    // 画面上の一番最初の会話ターンを取得し、その親を返す
     private getThreadContainer(): HTMLElement|null{
         const firstTurn=document.querySelector(
             'article[data-testid^="conversation-turn-"]'
@@ -58,22 +62,80 @@ export class GPTThread{
         return (firstTurn?.parentElement ?? null) as HTMLElement | null;
     }
 
+    // ユーザの操作からparentIdを推測する
+    initListener(){
+        // 選択範囲が変わったらlastTargetも変更する
+        document.addEventListener("selectionchange",()=>{
+            const sel=window.getSelection();
+            if(!sel||sel.rangeCount===0)return;
+
+            // 選択が始まった位置のDOMノード
+            const anchor=sel.anchorNode;
+            if(!anchor)return;
+
+            const resolved=this.resolveParentFromNode(anchor);
+            if(!resolved)return;
+
+            const pre =
+                (anchor.nodeType === Node.ELEMENT_NODE
+                    ? (anchor as Element)
+                    : anchor.parentElement
+                )?.closest("pre") as HTMLPreElement | null;
+
+            const preIndex = pre
+                ? Array.from(resolved.turn.querySelectorAll("pre")).indexOf(pre)
+                : null
+
+            this.lastTarget={
+                parentId:resolved.parentId,
+                preIndex,
+                updatedAt: Date.now(),
+            };
+        });
+
+        // backgroundからonMenuClickが発火 → messageを受け取る
+        chrome.runtime.onMessage.addListener((msg,_sender,sendResponse)=>{
+            if(msg?.kind==="RESOLVE_LAST_TARGET"){
+                if(!this.lastTarget){
+                    sendResponse({ok:false,reason:"no lastTarget"});
+                    return;
+                }
+
+                sendResponse({
+                    ok:true,
+                    parentId: this.lastTarget.parentId,
+                    preIndex: this.lastTarget.preIndex,
+                    updatedAt: this.lastTarget.updatedAt,
+                });
+
+                return true;
+            }
+
+            if(msg.kind==="FORCE_RESPONSE_THREADPAIR"){
+                const parentId:string=msg.parentId;
+                const preIndex:number|null=msg.preIndex;
+
+                const result=this.threadItems.get(parentId);
+                if(result){
+                    sendResponse({
+                        ok:true,
+                        result: result
+                    });
+                }
+            }
+        });
+    }
+
 
     initPageObserver(){
         const targetNode=this.getThreadContainer();
-        /*const targetNode: HTMLElement | null=document.body.querySelector(
-            SELECTORS.THREAD_CONTAINER
-        );*/
-        //console.log("targetNode.id=", targetNode?.id, "expected=", this.id);
-        //console.log("targetNode.innerText head=", targetNode?.innerText?.slice(0, 150));
-
         if(!targetNode){
             setTimeout(()=>this.initPageObserver(),5000);
             return;
         }
 
         targetNode.dataset.gptThreadId = this.id; 
-        if(!this.threadItems.length){
+        if(!this.threadItems.size){
             this.initThreadItems(targetNode);
         }
         this.observer?.disconnect();
@@ -171,24 +233,27 @@ export class GPTThread{
             return;
         }
 
+        // 追加されたノードすべて
         for(const mutation of mutationList){
             const addedNodes=Array.from(mutation.addedNodes);
             for(const node of addedNodes){
                 const el=
                     node.nodeType===Node.ELEMENT_NODE
                     ?(node as HTMLElement)
-                    :node.parentElement;
+                    : node.parentElement;
+                
+                    if(!el)continue;
 
-
-                if(!el)continue;
-
+                // 会話ターンを特定
                 const turn = el.closest('article[data-testid^="conversation-turn-"]') as HTMLElement | null;
 
+                // ない場合は無視
                 if(!turn){
-                    console.log("el.closest(article)=null, el HTML:", el.outerHTML?.slice(0, 200));
+                    console.log("el.closest(article)=null, el HTML:");
                     continue;
                 }
 
+                // ユーザーの送信文と一致判定
                 const extracted=this.extractUserText(turn);
                 if(extracted&&extracted===this.tempUserMessage){
                     console.log("ysessss");
@@ -208,6 +273,7 @@ export class GPTThread{
                         this.addToThread(mutations,observer)
                     });
 
+                    // botのターンを監視
                     this.botObserver.observe(
                         assistantTurn,
                         {
@@ -241,22 +307,25 @@ export class GPTThread{
         const addedNodes=mutationList
             .filter((m)=>m.addedNodes&&m.addedNodes.length>0)
             .flatMap((m)=>Array.from(m.addedNodes));
-        const hasPre=addedNodes.some((n)=>n.nodeName==='PRE');
-        if(hasPre){
-            const preNode=addedNodes.find(
-                (n)=>n.nodeName==='PRE'
-            ) as HTMLElement;
+        
+        const preNode=
+            (addedNodes.find((n)=>n.nodeName==="PRE")as HTMLPreElement|undefined)??
+            (addedNodes
+                .map((n)=>(n as HTMLElement).querySelector?.("pre")??null)
+                .find(Boolean)as HTMLPreElement | null)??
+            null;
+        if(preNode){
             const codeBlock=this.makeCodeBlock(preNode,this.tempPair.id);
-
             this.tempPair={
                 ...this.tempPair,
-                codeBlocks:[...this.tempPair.codeBlocks,codeBlock]
+                codeBlocks: [...this.tempPair.codeBlocks, codeBlock],
             }
         }
 
         // 5秒間何もないなら生成が止まったとみなす
         this.lastEditedTime&&clearTimeout(this.lastEditedTime);
         this.lastEditedTime=setTimeout(()=>{
+            // tempPairのすべてのcodeBlockに対してupdateCodeBlock
             const codeBlocks=this.tempPair?.codeBlocks.map((c)=>
             this.updateCodeBlock(c)
             );
@@ -275,12 +344,20 @@ export class GPTThread{
                 codeBlocks: codeBlocks || [],
             };
 
-            this.threadItems.push(this.tempPair);
+            // bot側からparentIdを取得
+            const key=
+                this.assistantTurnRef?.getAttribute("data-message-id")
+                ?? this.assistantTurnRef?.getAttribute("data-testid")
+                ?? this.tempPair?.id
+                ?? `${Date.now()}`;
+
+            this.threadItems.set(key,this.tempPair!);
             console.log("threadItems after response:",this.threadItems);
             this.reset();
         },5000);
     }
 
+    // codeBlockを上書き
     updateCodeBlock(codeBlock: CodeBlock){
         const innerText=codeBlock.codeRef.innerText;
         return{...codeBlock,code:innerText};
@@ -299,6 +376,7 @@ export class GPTThread{
             turn.querySelectorAll<HTMLElement>('[data-message-author-role="assistant"]')
         );
 
+        // data-message-author-role="assistant"かつplaceholderでない
         const real=assistants.find((el)=>{
             const mid=el.getAttribute("data-message-id")||"";
             if (mid.startsWith("placeholder-request-")) return false;
@@ -336,10 +414,15 @@ export class GPTThread{
             const id = `${Date.now()}-${userMessage.slice(0, 30)}`;
             const preNodes=b.querySelectorAll("pre");
             const codeBlocks: CodeBlock[] = Array.from(preNodes).map((pre) => {
-                return this.makeCodeBlock(pre as HTMLElement, id);
+                return this.makeCodeBlock(pre, id);
             });
 
-            this.threadItems.push({
+            // responseからparentIdを取得
+            const key=b.getAttribute("data-message-id")
+                ?? b.getAttribute("data-testid")
+                ?? id;
+
+            this.threadItems.set(key,{
                 id,
                 time: Date.now(),
                 userMessage,
@@ -354,13 +437,20 @@ export class GPTThread{
         this.observer?.disconnect();
     }
 
-    private makeCodeBlock(preNode: HTMLElement, parentId: string): CodeBlock {
+    private makeCodeBlock(preNode: HTMLPreElement, parentId: string): CodeBlock {
         // const codeNode = preNode?.querySelector('code');
         console.log('preNode', preNode, 'preNode.innerText', preNode.innerText);
         const code = preNode?.innerText || '';
         const codeRef = preNode as HTMLElement;
         const surroundingText = codeRef?.innerText || '';
         const language = preNode?.innerText.split(' ')[0] || '';
+        const turnParentId =
+            preNode.closest('article[data-testid^="conversation-turn-"]')
+                ?.getAttribute("data-message-id")
+            ?? preNode.closest('article[data-testid^="conversation-turn-"]')
+                ?.getAttribute("data-testid")
+            ?? "";
+
         const codeBlock:CodeBlock = {
             code,
             codeRef: preNode,
@@ -368,11 +458,40 @@ export class GPTThread{
             surroundingText,
             language,
             parentId,
+            turnParentId,
         };
         // console.log('adding this', codeBlock);
         //this.attachListeners(preNode, parentId);
         return codeBlock;
     }
 
+
+    // nodeからparentIdを特定 (bot側のparentId)
+    private resolveParentFromNode(node: Node):{parentId: string,turn:HTMLElement}|null{
+        const el=
+            node.nodeType===Node.ELEMENT_NODE
+                ? (node as Element)
+                : (node.parentElement ?? null);
+
+        if(!el)return null;
+
+        // nodeを包む一番近いelement
+        let turn = el.closest('article[data-testid^="conversation-turn-"]') as HTMLElement | null;
+        if(!turn)return null;
+
+        if(turn.getAttribute("data-turn")==="user"){
+            const assistant=this.findNextAssistantTurn(turn);
+            if(assistant)turn=assistant;
+        }
+
+        const parentId=
+            turn.getAttribute("data-message-id")??
+            turn.getAttribute("data-testid")??
+            "";
+        
+        if(!parentId)return null;
+
+        return {parentId,turn};
+    }    
 
 }

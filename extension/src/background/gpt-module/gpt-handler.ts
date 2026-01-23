@@ -37,6 +37,29 @@ export class GPTHandler extends Handler{
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab
     ):Promise<void>{
+        const tabId=tab.id;
+        if(tabId==null)return;
+
+        // イベントが発火したことを通知 → parentIdの取得
+        const resolved=await chrome.tabs.sendMessage(tabId,{
+            kind:"RESOLVE_LAST_TARGET",
+        }).catch(()=>null as any);
+
+        if(!resolved?.ok){
+            console.warn("No target:",resolved?.reason);
+            return;
+        }
+
+        // parentIdを渡す → threadPairを取得
+        const result=await chrome.tabs.sendMessage(tabId,{
+            kind: "FORCE_RESPONSE_THREADPAIR",
+            parentId: resolved.parentId,
+            preIndex: resolved.preIndex,
+        }).catch(()=>null as any);
+
+        console.log("succsess: clickmenu");
+        console.log(resolved.parentId);
+        console.log("result",result);
         
     }
 }

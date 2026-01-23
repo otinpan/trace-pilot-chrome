@@ -4,11 +4,28 @@ var TRACE_PILOT_MARKER = "// @trace-pilot";
 // background/generic-listener.ts
 var GenericListener = class {
   constructor(onEvent) {
-    this.onEvent = onEvent;
+    this.handlers = /* @__PURE__ */ new Set();
+    if (onEvent) this.handlers.add(onEvent);
     this.init();
   }
   init() {
     this.listen();
+  }
+  addHandler(handler) {
+    this.handlers.add(handler);
+    return () => this.removeHandler(handler);
+  }
+  removeHandler(handler) {
+    this.handlers.delete(handler);
+  }
+  emit(ev) {
+    for (const h of this.handlers) {
+      try {
+        h(ev);
+      } catch (e) {
+        console.error("GenericListener handelr error:", e, "event", ev);
+      }
+    }
   }
   listen() {
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -19,7 +36,7 @@ var GenericListener = class {
       if (isPdf) {
         command = "pdfOpen" /* PDF_OPEN */;
       } else if (url.includes("chatgpt.com")) {
-        command = "chatOpen" /* CHAT_OPEN */;
+        command = "chatOpen" /* GPT_OPEN */;
       } else if (url.startsWith("https://www.google.com/")) {
         command = "googleOpen" /* GOOGLE_OPEN */;
       } else if (url.startsWith("https://stackoverflow.com")) {
@@ -27,7 +44,7 @@ var GenericListener = class {
       } else if (url.startsWith("https://github.com")) {
         command = "githubOpen" /* GITHUB_OPEN */;
       }
-      this.onEvent({ command, tabId, url, title: tab.title });
+      this.emit({ command, tabId, url, title: tab.title });
     });
   }
 };
@@ -75,15 +92,58 @@ var Handler = class {
   }
 };
 
-// background/pdf-handler.ts
+// background/gpt-module/gpt-handler.ts
 var MENU_ID = "create_hash_and_store";
+var GPTHandler = class extends Handler {
+  constructor() {
+    super(MENU_ID);
+    this.threads = /* @__PURE__ */ new Map();
+    this.activeThread = null;
+  }
+  onGenericEvent(ev) {
+    if (ev.command === "chatOpen" /* GPT_OPEN */) {
+      if (!ev.url) return;
+      if (!ev.title) return;
+      this.setEnabled(true);
+      chrome.tabs.sendMessage(ev.tabId, {
+        kind: "GPT_START_OBSERVE",
+        url: ev.url,
+        title: ev.title
+      }).catch(() => {
+      });
+      return;
+    } else {
+      this.setEnabled(false);
+    }
+  }
+  async onMenuClick(info, tab) {
+    const tabId = tab.id;
+    if (tabId == null) return;
+    const resolved = await chrome.tabs.sendMessage(tabId, {
+      kind: "RESOLVE_LAST_TARGET"
+    }).catch(() => null);
+    if (!resolved?.ok) {
+      console.warn("No target:", resolved?.reason);
+      return;
+    }
+    const result = await chrome.tabs.sendMessage(tabId, {
+      kind: "FORCE_RESPONSE_THREADPAIR",
+      parentId: resolved.parentId,
+      preIndex: resolved.preIndex
+    }).catch(() => null);
+    console.log("result", result);
+  }
+};
+var gpt_handler_default = GPTHandler;
+
+// background/pdf-module/pdf-handler.ts
+var MENU_ID2 = "create_hash_and_store";
 var NATIVE_HOST_NAME = "trace_pilot_host_chrome";
 var PdfHandler = class extends Handler {
   constructor() {
-    super(MENU_ID);
+    super(MENU_ID2);
     this.lastPdf = null;
     this.lastPlainText = "";
-    this.msgInstalled = false;
   }
   onGenericEvent(ev) {
     if (ev.command === "pdfOpen" /* PDF_OPEN */) {
@@ -169,7 +229,16 @@ function isLikelyPdfUrl2(raw) {
     return raw.toLowerCase().includes(".pdf");
   }
 }
+async function focusTabAndWindow(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.windowId != null) {
+    await chrome.windows.update(tab.windowId, { focused: true });
+  }
+  await chrome.tabs.update(tabId, { active: true });
+  await new Promise((r) => setTimeout(r, 50));
+}
 async function writeClipboardViaContent(tabId, text) {
+  await focusTabAndWindow(tabId);
   const res = await chrome.tabs.sendMessage(tabId, {
     kind: "TRACE_PILOT_WRITE_CLIPBOARD",
     text
@@ -180,8 +249,11 @@ async function writeClipboardViaContent(tabId, text) {
 }
 
 // background/background.ts
+var genericListener = new generic_listener_default();
 var pdfHandler = new PdfHandler();
-new generic_listener_default((ev) => pdfHandler.onGenericEvent(ev));
+genericListener.addHandler((ev) => pdfHandler.onGenericEvent(ev));
+var gptHandler = new gpt_handler_default();
+genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && typeof msg === "object" && msg.type === "PING") {
     sendResponse({ ok: true, from: "background" });
