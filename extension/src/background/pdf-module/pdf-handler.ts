@@ -1,9 +1,18 @@
-import { COMMANDS,GenericEvent,MessageToNativeHost, WEB_INFO_SOURCE,TRACE_PILOT_MARKER } from "../../type";
+import { 
+    MENU_ID,
+    NATIVE_HOST_NAME,
+    COMMANDS,GenericEvent,
+    MessageToNativeHost, 
+    TRACE_PILOT_MARKER,
+    RESPONSE_TYPE,
+    PDFData,
+    GPTData,
+} from "../../type";
 import { Handler } from "../handler";
 
 
-const MENU_ID="create_hash_and_store";
-const NATIVE_HOST_NAME="trace_pilot_host_chrome";
+
+
 
 type PdfState={
     tabId: number;
@@ -21,8 +30,10 @@ export class PdfHandler extends Handler {
     }
 
     public onGenericEvent(ev: GenericEvent){
-        if(ev.command===COMMANDS.PDF_OPEN){
+        if(ev.command===COMMANDS.PDF_OPEN&&ev.url){
             if(!ev.url)return;
+
+            console.log("pdf");
 
             this.lastPdf={
                 tabId: ev.tabId,
@@ -33,8 +44,6 @@ export class PdfHandler extends Handler {
             }
             
             this.setEnabled(true);
-        }else{
-            this.setEnabled(false);
         }
     }
 
@@ -63,18 +72,17 @@ export class PdfHandler extends Handler {
         console.log("selected text: ",plainText);
 
         const msg:MessageToNativeHost={
+            type: RESPONSE_TYPE.CHROME_PDF,
+            data: {},
             url,
             plain_text:plainText,
-            is_pdf: true,
-            web_type: WEB_INFO_SOURCE.PDF,
-            additional_data:{kind:"NONE"},
         }
         let res=await this.sendToNativeHost(msg);
         const metaHash=res.metaHash;
 
         // クリップボードに貼る文字列
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
-        const clipboardText = `${marker}\n${this.lastPlainText}`;
+        const clipboardText = `${marker}\n${plainText}`;
 
         await writeClipboardViaContent(tab.id!, clipboardText);
     }

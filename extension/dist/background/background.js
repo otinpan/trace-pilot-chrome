@@ -1,5 +1,7 @@
 // type.ts
 var TRACE_PILOT_MARKER = "// @trace-pilot";
+var MENU_ID = "create_hash_and_store";
+var NATIVE_HOST_NAME = "trace_pilot_host_chrome";
 
 // background/generic-listener.ts
 var GenericListener = class {
@@ -93,15 +95,16 @@ var Handler = class {
 };
 
 // background/gpt-module/gpt-handler.ts
-var MENU_ID = "create_hash_and_store";
 var GPTHandler = class extends Handler {
   constructor() {
     super(MENU_ID);
     this.threads = /* @__PURE__ */ new Map();
     this.activeThread = null;
+    this.lastPlainText = "";
   }
   onGenericEvent(ev) {
-    if (ev.command === "chatOpen" /* GPT_OPEN */) {
+    if (ev.command === "chatOpen" /* GPT_OPEN */ && ev.url && ev.title) {
+      console.log("gpt");
       if (!ev.url) return;
       if (!ev.title) return;
       this.setEnabled(true);
@@ -112,8 +115,6 @@ var GPTHandler = class extends Handler {
       }).catch(() => {
       });
       return;
-    } else {
-      this.setEnabled(false);
     }
   }
   async onMenuClick(info, tab) {
@@ -131,23 +132,37 @@ var GPTHandler = class extends Handler {
       parentId: resolved.parentId,
       preIndex: resolved.preIndex
     }).catch(() => null);
-    console.log("result", result);
+    let plainText = info.selectionText;
+    if (plainText === void 0) {
+      return;
+    }
+    this.lastPlainText = plainText;
+  }
+  sendToNativeHost(message) {
+    return new Promise((resolve, reject) => {
+      console.log("send message to native host: ", message);
+      chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
+        const err = chrome.runtime.lastError;
+        if (err) return reject(err.message || String(err));
+        console.log("succcess", res);
+        resolve(res);
+      });
+    });
   }
 };
 var gpt_handler_default = GPTHandler;
 
 // background/pdf-module/pdf-handler.ts
-var MENU_ID2 = "create_hash_and_store";
-var NATIVE_HOST_NAME = "trace_pilot_host_chrome";
 var PdfHandler = class extends Handler {
   constructor() {
-    super(MENU_ID2);
+    super(MENU_ID);
     this.lastPdf = null;
     this.lastPlainText = "";
   }
   onGenericEvent(ev) {
-    if (ev.command === "pdfOpen" /* PDF_OPEN */) {
+    if (ev.command === "pdfOpen" /* PDF_OPEN */ && ev.url) {
       if (!ev.url) return;
+      console.log("pdf");
       this.lastPdf = {
         tabId: ev.tabId,
         url: ev.url,
@@ -156,8 +171,6 @@ var PdfHandler = class extends Handler {
         updatedAt: Date.now()
       };
       this.setEnabled(true);
-    } else {
-      this.setEnabled(false);
     }
   }
   // クリックされたとき
@@ -176,11 +189,10 @@ var PdfHandler = class extends Handler {
     this.lastPlainText = plainText;
     console.log("selected text: ", plainText);
     const msg = {
+      type: "CHROME_PDF" /* CHROME_PDF */,
+      data: {},
       url,
-      plain_text: plainText,
-      is_pdf: true,
-      web_type: "PDF" /* PDF */,
-      additional_data: { kind: "NONE" }
+      plain_text: plainText
     };
     let res = await this.sendToNativeHost(msg);
     const metaHash = res.metaHash;

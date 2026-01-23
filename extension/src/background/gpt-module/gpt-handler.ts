@@ -1,8 +1,7 @@
-import { COMMANDS,GenericEvent,MessageToNativeHost, WEB_INFO_SOURCE,TRACE_PILOT_MARKER } from "../../type";
+import { COMMANDS,GenericEvent,MessageToNativeHost, TRACE_PILOT_MARKER } from "../../type";
 import { Handler } from "../handler";
 import { GPTThread } from "../../content/gpt-module/gpt-thread";
-const MENU_ID="create_hash_and_store";
-const NATIVE_HOST_NAME="trace_pilot_host_chrome";
+import { MENU_ID,NATIVE_HOST_NAME } from "../../type";
 
 
 export class GPTHandler extends Handler{
@@ -14,7 +13,8 @@ export class GPTHandler extends Handler{
     }
 
     public onGenericEvent(ev: GenericEvent){
-        if(ev.command===COMMANDS.GPT_OPEN){
+        if(ev.command===COMMANDS.GPT_OPEN&&ev.url&&ev.title){
+            console.log("gpt");
             if(!ev.url)return;
             if(!ev.title)return;
             this.setEnabled(true);
@@ -29,8 +29,6 @@ export class GPTHandler extends Handler{
             });
             return;
 
-        }else{
-            this.setEnabled(false);
         }
     }
 
@@ -68,7 +66,20 @@ export class GPTHandler extends Handler{
         }
         
         this.lastPlainText=plainText;
-        
+
+
+    }
+
+    private sendToNativeHost(message: any):Promise<any>{
+        return new Promise((resolve,reject)=>{
+            console.log("send message to native host: ",message);
+            chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res)=>{
+                const err=chrome.runtime.lastError;
+                if(err)return reject(err.message||String(err));
+                console.log("succcess",res);
+                resolve(res);
+            });
+        })
     }
 }
 

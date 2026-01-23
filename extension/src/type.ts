@@ -1,8 +1,13 @@
+import { ThreadPair } from "./content/gpt-module/gpt-thread";
+
 // marker
 export const TRACE_PILOT_MARKER:string="// @trace-pilot";
 
 // content script に問い合わせ（レスポンス型を付ける）
 export type TracePilotResponse = { selectionText: string } | { error: string };
+
+export const MENU_ID="create_hash_and_store";
+export const NATIVE_HOST_NAME="trace_pilot_host_chrome";
 
 export type TracePilotRequest={
     type: "trace-pilot";
@@ -26,22 +31,43 @@ export type GenericEvent={
 }
 
 
-
-
-export interface MessageToNativeHost{
-    url: string,
-    plain_text: string,
-    is_pdf: boolean,
-    web_type: WEB_INFO_SOURCE;
-    additional_data: AdditionalData,
-}
-
-export enum WEB_INFO_SOURCE{
+export enum RESPONSE_TYPE{
     CHAT_GPT="CHAT_GPT",
-    PDF="PDF"
+    CHROME_PDF="CHROME_PDF",
+    OTHER="OTHER"
 }
 
-export type AdditionalData=
-| {kind:"NONE"}
+export type MessageToNativeHost =
+  | ChromePdfMessage
+  | ChatGptMessage
+  | OtherMessage;
+
+interface BaseMessage {
+  url: string;
+  plain_text: string;
+}
+
+export interface ChromePdfMessage extends BaseMessage {
+  type: RESPONSE_TYPE.CHROME_PDF;
+  data: PDFData;
+}
+
+export interface ChatGptMessage extends BaseMessage {
+  type: RESPONSE_TYPE.CHAT_GPT;
+  data: GPTData;
+}
+
+export interface OtherMessage extends BaseMessage {
+  type: RESPONSE_TYPE.OTHER;
+  data: null;
+}
 
 
+
+export interface PDFData{
+
+}
+
+export interface GPTData{
+    thread_pair: ThreadPair,
+}

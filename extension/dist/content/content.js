@@ -302,10 +302,12 @@ var GPTThread = class {
   }
   makeCodeBlock(preNode, parentId) {
     console.log("preNode", preNode, "preNode.innerText", preNode.innerText);
-    const code = preNode?.innerText || "";
+    const codeNode = preNode.querySelector("code");
+    const code = codeNode?.innerText ?? "";
     const codeRef = preNode;
     const surroundingText = codeRef?.innerText || "";
-    const language = preNode?.innerText.split(" ")[0] || "";
+    const langClass = codeNode?.className ?? "";
+    const language = langClass.replace("language-", "");
     const turnParentId = preNode.closest('article[data-testid^="conversation-turn-"]')?.getAttribute("data-message-id") ?? preNode.closest('article[data-testid^="conversation-turn-"]')?.getAttribute("data-testid") ?? "";
     const codeBlock = {
       code,

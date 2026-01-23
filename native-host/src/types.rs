@@ -74,10 +74,67 @@ pub struct GPTMetadata {
     pub isText: bool,
 }
 
+
+// message from chrome /////////////////////////////////////////////////////
+
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum RequestFromChrome {
+    #[serde(rename = "CHROME_PDF")]
+    ChromePDF {
+        data: PDFData,
+        url: String,
+        plain_text: String,
+    },
+
+    #[serde(rename = "CHAT_GPT")]
+    ChatGpt {
+        data: GPTData,
+        url: String,
+        plain_text: String,
+    },
+
+    #[serde(rename = "OTHER")]
+    Other {
+        data: Option<serde_json::Value>, // or omit data entirely, どっちでも
+        url: String,
+        plain_text: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PDFData {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GPTData {
+    #[serde(rename = "thread_pair")]
+    pub thread: ThreadPair,
+}
+
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodeBlock {
+    pub code: String,
+    #[serde(default)]
+    pub codeRef: Option<String>,
+    pub copied: bool,
+    pub surroundingText: String,
+    pub language: String,
+    pub parentId: String,
+    pub turnParentId: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadPair {
     pub id: String,
     pub time: i64,
-    pub prompt: String,
-    pub response: String,
+    pub userMessage: String,
+    pub botResponse: String,
+    pub codeBlocks: Vec<CodeBlock>,
 }
+
+
+

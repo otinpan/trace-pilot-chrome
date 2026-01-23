@@ -13,27 +13,6 @@ struct Response {
 }
 
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct Request {
-    url: String,
-    plain_text: String,
-    is_pdf: bool,
-    web_type: WebInfoSource,
-    additional_data: AdditionalData,
-}
-
-#[derive(Debug, Deserialize)]
-enum WebInfoSource {
-    CHAT_GPT,
-    PDF,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "kind")]
-enum AdditionalData {
-    NONE,
-}
 
 
 fn main()->Result<()>{
@@ -44,13 +23,18 @@ fn main()->Result<()>{
 async fn async_main() -> Result<()> {
     let input = read_input().context("read_input failed")?;
 
-    let req: Request = serde_json::from_slice(&input)
+    let req: types::RequestFromChrome = serde_json::from_slice(&input)
         .context("failed to parse Request JSON")?;
 
     
-    let meta_hash = hash_and_store_pdf(req.url, req.plain_text, req.is_pdf)
-    .await
-    .context("hash_and_store failed")?;
+    let meta_hash=match req{
+        types::RequestFromChrome::ChromePDF{url,plain_text,..}=>{
+            hash_and_store_pdf(url,plain_text,true)
+                .await
+                .context("hash_and_store failed")?
+        }
+        _ => anyhow::bail!("expected CHROME_PDF request"),
+    };
 
     
     let resp = Response { metaHash: meta_hash };
