@@ -11,8 +11,7 @@ import {
 import { Handler } from "../handler";
 
 
-
-
+type ClickInfoExt = chrome.contextMenus.OnClickData & { tabId?: number };
 
 type PdfState={
     tabId: number;
@@ -47,6 +46,27 @@ export class PdfHandler extends Handler {
         }
     }
 
+
+    private async getValideTabId(
+        info: chrome.contextMenus.OnClickData,
+        tab: chrome.tabs.Tab
+    ):Promise<number|null>{
+        const i=info as ClickInfoExt;
+        const cands=[
+            i.tabId,
+            tab.id,
+            this.lastPdf?.tabId,
+        ].filter((x): x is number=>typeof x==="number");
+
+        const ok=cands.find((id)=>id>=0);
+        if(ok!=null)return ok;
+
+        const [active]=await chrome.tabs.query({active:true,currentWindow:true});
+        if(active?.id!=null && active.id>=0)return active.id;
+
+        return null;
+    }
+
     
 
     // クリックされたとき
@@ -54,8 +74,20 @@ export class PdfHandler extends Handler {
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab
     ):Promise<void>{
-        const tabId=tab.id!;
-        const rawUrl=tab.url || this.lastPdf?.url || "";
+        const tabId=await this.getValideTabId(info,tab);
+        if(tabId==null||tabId<0){
+            console.error("no valide tabId",tabId);
+            return;
+        }
+
+        const rawUrl =
+            (info as any).frameUrl ||
+            info.pageUrl ||
+            tab.url ||
+            (tab as any).pendingUrl ||
+            this.lastPdf?.url ||
+            "";
+
         if(!rawUrl){
             console.error("No url found for PDF tab.");
             return;
@@ -71,6 +103,12 @@ export class PdfHandler extends Handler {
 
         console.log("selected text: ",plainText);
 
+        console.log("tab.url:", tab.url);
+        console.log("tab.pendingUrl:", (tab as any).pendingUrl);
+        console.log("info.pageUrl:", info.pageUrl);
+        console.log("info.frameUrl:", (info as any).frameUrl);
+
+        
         const msg:MessageToNativeHost={
             type: RESPONSE_TYPE.CHROME_PDF,
             data: {},
@@ -84,12 +122,12 @@ export class PdfHandler extends Handler {
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}\n${plainText}`;
 
-        await writeClipboardViaContent(tab.id!, clipboardText);
+        await writeClipboardViaContent(tabId, clipboardText);
     }
 
     private sendToNativeHost(message: any):Promise<any>{
         return new Promise((resolve,reject)=>{
-            console.log("send message to native host: ",message);
+            console.log("send message to native host (pdf): ",message);
             chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res)=>{
                 const err=chrome.runtime.lastError;
                 if(err)return reject(err.message||String(err));
@@ -151,7 +189,7 @@ async function focusTabAndWindow(tabId: number) {
 }
 
 // background / service worker 側
-async function writeClipboardViaContent(tabId: number, text: string) {
+export async function writeClipboardViaContent(tabId: number, text: string) {
    await focusTabAndWindow(tabId);
 
     // content script にメッセージ送信

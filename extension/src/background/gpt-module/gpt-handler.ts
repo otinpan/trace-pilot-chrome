@@ -1,7 +1,20 @@
-import { COMMANDS,GenericEvent,MessageToNativeHost, TRACE_PILOT_MARKER } from "../../type";
+import { 
+    MENU_ID,
+    NATIVE_HOST_NAME,
+    COMMANDS,GenericEvent,
+    MessageToNativeHost, 
+    TRACE_PILOT_MARKER,
+    RESPONSE_TYPE,
+    PDFData,
+    GPTData,
+} from "../../type";
 import { Handler } from "../handler";
 import { GPTThread } from "../../content/gpt-module/gpt-thread";
-import { MENU_ID,NATIVE_HOST_NAME } from "../../type";
+import { writeClipboardViaContent } from "../pdf-module/pdf-handler";
+import { CodeBlock,ThreadPair } from "../../content/gpt-module/gpt-thread";
+
+type ClickInfoExt = chrome.contextMenus.OnClickData & { tabId?: number };
+
 
 
 export class GPTHandler extends Handler{
@@ -32,12 +45,39 @@ export class GPTHandler extends Handler{
         }
     }
 
+    private async getValideTabId(
+        info: chrome.contextMenus.OnClickData,
+        tab: chrome.tabs.Tab
+    ):Promise<number|null>{
+        const i=info as ClickInfoExt;
+        const cands=[
+            i.tabId,
+            tab.id,
+        ].filter((x): x is number=>typeof x==="number");
+
+        const ok=cands.find((id)=>id>=0);
+        if(ok!=null)return ok;
+
+        const [active]=await chrome.tabs.query({active:true,currentWindow:true});
+        if(active?.id!=null && active.id>=0)return active.id;
+
+        return null;
+    }
+
     protected override async onMenuClick(
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab
     ):Promise<void>{
-        const tabId=tab.id;
+        const tabId=await this.getValideTabId(info,tab);
+        if(tabId==null||tabId<0){
+            console.error("no valide tabId",tabId);
+            return;
+        }
+        const rawUrl=tab.url || "";
         if(tabId==null)return;
+        if(!rawUrl){
+            return;
+        }
 
         // イベントが発火したことを通知 → parentIdの取得
         const resolved=await chrome.tabs.sendMessage(tabId,{
@@ -56,9 +96,10 @@ export class GPTHandler extends Handler{
             preIndex: resolved.preIndex,
         }).catch(()=>null as any);
 
-        /*console.log("succsess: clickmenu");
+        console.log("succsess: clickmenu");
         console.log(resolved.parentId);
-        console.log("result",result);*/
+        console.log("result",result);
+
 
         let plainText=info.selectionText;
         if(plainText===undefined){
@@ -67,12 +108,41 @@ export class GPTHandler extends Handler{
         
         this.lastPlainText=plainText;
 
+        const threadPair=result.result;
+        // codeBlockを文字列に直す
+        const sanitized = {
+            ...threadPair,
+            codeBlocks: threadPair.codeBlocks.map((cb: CodeBlock) => {
+                const { codeRef, ...rest } = cb;
+                return rest;
+            }),
+        };
+
+
+        const msg:MessageToNativeHost={
+            type:RESPONSE_TYPE.CHAT_GPT,
+            data: {thread_pair:sanitized},
+            url: rawUrl,
+            plain_text: plainText,
+        }
+
+
+
+        console.log(msg);
+        let res=await this.sendToNativeHost(msg);
+        const metaHash=res.metaHash;
+
+         // クリップボードに貼る文字列
+        const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
+        const clipboardText = `${marker}\n${plainText}`;
+        
+        await writeClipboardViaContent(tab.id!, clipboardText);
 
     }
 
     private sendToNativeHost(message: any):Promise<any>{
         return new Promise((resolve,reject)=>{
-            console.log("send message to native host: ",message);
+            console.log("send message to native host (gpt): ",message);
             chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res)=>{
                 const err=chrome.runtime.lastError;
                 if(err)return reject(err.message||String(err));
@@ -84,3 +154,4 @@ export class GPTHandler extends Handler{
 }
 
 export default GPTHandler;
+

@@ -13,8 +13,6 @@ struct Response {
 }
 
 
-
-
 fn main()->Result<()>{
     let rt=tokio::runtime::Runtime::new()?;
     rt.block_on(async_main())
@@ -22,6 +20,11 @@ fn main()->Result<()>{
 
 async fn async_main() -> Result<()> {
     let input = read_input().context("read_input failed")?;
+
+    eprintln!("raw input bytes = {}", input.len());
+eprintln!("{}", String::from_utf8_lossy(&input));
+eprintln!("first char = {:?}", String::from_utf8_lossy(&input).chars().next());
+
 
     let req: types::RequestFromChrome = serde_json::from_slice(&input)
         .context("failed to parse Request JSON")?;
@@ -31,18 +34,27 @@ async fn async_main() -> Result<()> {
         types::RequestFromChrome::ChromePDF{url,plain_text,..}=>{
             hash_and_store_pdf(url,plain_text,true)
                 .await
-                .context("hash_and_store failed")?
+                .context("hash_and_store_pdf failed")?
         }
-        _ => anyhow::bail!("expected CHROME_PDF request"),
+        
+
+        types::RequestFromChrome::ChatGpt{url,plain_text,data}=>{
+            hash_and_store_gpt(url,plain_text,data)
+                .await
+                .context("hash_and_store_gpt failed")?
+        }
+       types::RequestFromChrome::Other { .. } => {
+            anyhow::bail!("expected CHROME_PDF or CHAT_GPT request")
+        }
     };
 
-    
     let resp = Response { metaHash: meta_hash };
     let resp_json = serde_json::to_vec(&resp).context("failed to serialize response")?;
     write_output_bytes(&resp_json).context("write_output failed")?;
 
     Ok(())
 }
+
 
 
 
@@ -90,13 +102,12 @@ async fn hash_and_store_pdf(url:String,plain_text:String,is_pdf:bool)->Result<St
 
     eprintln!("original_hash: {}",original_hash);
 
-    // fullTextの取得
-    let full_text_hash: String="ppp".to_string();
-    
+    eprintln!("url: {}",url);
     let bytes = get_bytes_from_url::get_bytes_from_url(&url).await?;
     let data: &[u8] = &bytes;
 
     let full_text_hash = hash_and_store::calculate_hash_and_store_bytes(cwd, data)?;
+    eprintln!("full_text_hash: {}",full_text_hash);
 
     
 
@@ -136,4 +147,62 @@ async fn hash_and_store_pdf(url:String,plain_text:String,is_pdf:bool)->Result<St
     Ok(meta_hash)
 }
 
+
+
+async fn hash_and_store_gpt(url: String,plain_text:String,data:types::GPTData)->Result<String>{
+
+    let cwd="/home/hase/thesis/trace-pilot-chrome/extension";
+    // plainTextの保存
+    let plain_text_str:&str=plain_text.as_str();
+    let original_hash
+        =hash_and_store::calculate_hash_and_store_text(cwd, plain_text_str)?;
+
+    eprintln!("original_hash: {}",original_hash);
+
+    let thread_pair=data.thread_pair;
+    let user_message:&str=thread_pair.userMessage.as_str();
+    let prompt_hash
+        =hash_and_store::calculate_hash_and_store_text(cwd,user_message)?;
+    
+    let bot_response:&str=thread_pair.botResponse.as_str();
+    let response_hash
+        =hash_and_store::calculate_hash_and_store_text(cwd, bot_response)?;
+    
+
+    let meta = types::Metadata {
+        originalHash: original_hash,
+        additionalHash: Some(
+            types::AdditionalHash::GPTHash(
+                types::GPTHash{
+                    promptHash: prompt_hash,
+                    generatedHash: response_hash,
+                }
+            )
+        ),
+        url,
+
+        r#type: types::WebInfoSource::ChatGpt,
+
+        timeCopied: Utc::now().to_rfc3339(),
+        timeCopiedNumber: Utc::now().timestamp_millis(),
+
+        additionalMetaData: Some(
+            types::AdditionalMetadata::GPTMetadata(
+                types::GPTMetadata {
+                    isText: false,
+                }
+            )
+        ),
+    };
+    
+
+    eprintln!("{:?}",meta);
+
+    let meta_json=serde_json::to_string(&meta)?;
+    let meta_json_str: &str=meta_json.as_str();
+    let meta_hash=hash_and_store::calculate_hash_and_store_text(cwd, meta_json_str)?;
+
+
+    Ok(meta_hash)
+}
 

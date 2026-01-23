@@ -76,9 +76,6 @@ pub struct GPTMetadata {
 
 
 // message from chrome /////////////////////////////////////////////////////
-
-
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum RequestFromChrome {
@@ -109,8 +106,7 @@ pub struct PDFData {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GPTData {
-    #[serde(rename = "thread_pair")]
-    pub thread: ThreadPair,
+    pub thread_pair: ThreadPair,
 }
 
 

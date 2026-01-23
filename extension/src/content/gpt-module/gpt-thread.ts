@@ -15,7 +15,7 @@ export interface ThreadPair{
     codeBlocks: CodeBlock[];
 }
 
-interface CodeBlock{
+export interface CodeBlock{
     code:string;
     codeRef: HTMLElement;
     copied: boolean;

@@ -94,79 +94,6 @@ var Handler = class {
   }
 };
 
-// background/gpt-module/gpt-handler.ts
-var GPTHandler = class extends Handler {
-  constructor() {
-    super(MENU_ID);
-    this.threads = /* @__PURE__ */ new Map();
-    this.activeThread = null;
-    this.lastPlainText = "";
-  }
-  onGenericEvent(ev) {
-    if (ev.command === "chatOpen" /* GPT_OPEN */ && ev.url && ev.title) {
-      console.log("gpt");
-      if (!ev.url) return;
-      if (!ev.title) return;
-      this.setEnabled(true);
-      chrome.tabs.sendMessage(ev.tabId, {
-        kind: "GPT_START_OBSERVE",
-        url: ev.url,
-        title: ev.title
-      }).catch(() => {
-      });
-      return;
-    }
-  }
-  async onMenuClick(info, tab) {
-    const tabId = tab.id;
-    if (tabId == null) return;
-    const resolved = await chrome.tabs.sendMessage(tabId, {
-      kind: "RESOLVE_LAST_TARGET"
-    }).catch(() => null);
-    if (!resolved?.ok) {
-      console.warn("No target:", resolved?.reason);
-      return;
-    }
-    const result = await chrome.tabs.sendMessage(tabId, {
-      kind: "FORCE_RESPONSE_THREADPAIR",
-      parentId: resolved.parentId,
-      preIndex: resolved.preIndex
-    }).catch(() => null);
-    let plainText = info.selectionText;
-    if (plainText === void 0) {
-      return;
-    }
-    this.lastPlainText = plainText;
-  }
-  sendToNativeHost(message) {
-    return new Promise((resolve, reject) => {
-      console.log("send message to native host: ", message);
-      chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
-        const err = chrome.runtime.lastError;
-        if (err) return reject(err.message || String(err));
-        console.log("succcess", res);
-        resolve(res);
-      });
-    });
-  }
-};
-var gpt_handler_default = GPTHandler;
-
-// background/other-handler.ts
-var OtherHandler = class extends Handler {
-  constructor() {
-    super(MENU_ID);
-  }
-  onGenericEvent(ev) {
-    if (ev.command === "otherOpen" /* OTHER_OPEN */ && ev.url) {
-      this.setEnabled(false);
-    }
-  }
-  async onMenuClick(info, tab) {
-    return;
-  }
-};
-
 // background/pdf-module/pdf-handler.ts
 var PdfHandler = class extends Handler {
   constructor() {
@@ -188,10 +115,27 @@ var PdfHandler = class extends Handler {
       this.setEnabled(true);
     }
   }
+  async getValideTabId(info, tab) {
+    const i = info;
+    const cands = [
+      i.tabId,
+      tab.id,
+      this.lastPdf?.tabId
+    ].filter((x) => typeof x === "number");
+    const ok = cands.find((id) => id >= 0);
+    if (ok != null) return ok;
+    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (active?.id != null && active.id >= 0) return active.id;
+    return null;
+  }
   // クリックされたとき
   async onMenuClick(info, tab) {
-    const tabId = tab.id;
-    const rawUrl = tab.url || this.lastPdf?.url || "";
+    const tabId = await this.getValideTabId(info, tab);
+    if (tabId == null || tabId < 0) {
+      console.error("no valide tabId", tabId);
+      return;
+    }
+    const rawUrl = info.frameUrl || info.pageUrl || tab.url || tab.pendingUrl || this.lastPdf?.url || "";
     if (!rawUrl) {
       console.error("No url found for PDF tab.");
       return;
@@ -203,6 +147,10 @@ var PdfHandler = class extends Handler {
     }
     this.lastPlainText = plainText;
     console.log("selected text: ", plainText);
+    console.log("tab.url:", tab.url);
+    console.log("tab.pendingUrl:", tab.pendingUrl);
+    console.log("info.pageUrl:", info.pageUrl);
+    console.log("info.frameUrl:", info.frameUrl);
     const msg = {
       type: "CHROME_PDF" /* CHROME_PDF */,
       data: {},
@@ -214,11 +162,11 @@ var PdfHandler = class extends Handler {
     const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
     const clipboardText = `${marker}
 ${plainText}`;
-    await writeClipboardViaContent(tab.id, clipboardText);
+    await writeClipboardViaContent(tabId, clipboardText);
   }
   sendToNativeHost(message) {
     return new Promise((resolve, reject) => {
-      console.log("send message to native host: ", message);
+      console.log("send message to native host (pdf): ", message);
       chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
         const err = chrome.runtime.lastError;
         if (err) return reject(err.message || String(err));
@@ -274,6 +222,123 @@ async function writeClipboardViaContent(tabId, text) {
     throw new Error(res?.error ?? "clipboard write failed");
   }
 }
+
+// background/gpt-module/gpt-handler.ts
+var GPTHandler = class extends Handler {
+  constructor() {
+    super(MENU_ID);
+    this.threads = /* @__PURE__ */ new Map();
+    this.activeThread = null;
+    this.lastPlainText = "";
+  }
+  onGenericEvent(ev) {
+    if (ev.command === "chatOpen" /* GPT_OPEN */ && ev.url && ev.title) {
+      console.log("gpt");
+      if (!ev.url) return;
+      if (!ev.title) return;
+      this.setEnabled(true);
+      chrome.tabs.sendMessage(ev.tabId, {
+        kind: "GPT_START_OBSERVE",
+        url: ev.url,
+        title: ev.title
+      }).catch(() => {
+      });
+      return;
+    }
+  }
+  async getValideTabId(info, tab) {
+    const i = info;
+    const cands = [
+      i.tabId,
+      tab.id
+    ].filter((x) => typeof x === "number");
+    const ok = cands.find((id) => id >= 0);
+    if (ok != null) return ok;
+    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (active?.id != null && active.id >= 0) return active.id;
+    return null;
+  }
+  async onMenuClick(info, tab) {
+    const tabId = await this.getValideTabId(info, tab);
+    if (tabId == null || tabId < 0) {
+      console.error("no valide tabId", tabId);
+      return;
+    }
+    const rawUrl = tab.url || "";
+    if (tabId == null) return;
+    if (!rawUrl) {
+      return;
+    }
+    const resolved = await chrome.tabs.sendMessage(tabId, {
+      kind: "RESOLVE_LAST_TARGET"
+    }).catch(() => null);
+    if (!resolved?.ok) {
+      console.warn("No target:", resolved?.reason);
+      return;
+    }
+    const result = await chrome.tabs.sendMessage(tabId, {
+      kind: "FORCE_RESPONSE_THREADPAIR",
+      parentId: resolved.parentId,
+      preIndex: resolved.preIndex
+    }).catch(() => null);
+    console.log("succsess: clickmenu");
+    console.log(resolved.parentId);
+    console.log("result", result);
+    let plainText = info.selectionText;
+    if (plainText === void 0) {
+      return;
+    }
+    this.lastPlainText = plainText;
+    const threadPair = result.result;
+    const sanitized = {
+      ...threadPair,
+      codeBlocks: threadPair.codeBlocks.map((cb) => {
+        const { codeRef, ...rest } = cb;
+        return rest;
+      })
+    };
+    const msg = {
+      type: "CHAT_GPT" /* CHAT_GPT */,
+      data: { thread_pair: sanitized },
+      url: rawUrl,
+      plain_text: plainText
+    };
+    console.log(msg);
+    let res = await this.sendToNativeHost(msg);
+    const metaHash = res.metaHash;
+    const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
+    const clipboardText = `${marker}
+${plainText}`;
+    await writeClipboardViaContent(tab.id, clipboardText);
+  }
+  sendToNativeHost(message) {
+    return new Promise((resolve, reject) => {
+      console.log("send message to native host (gpt): ", message);
+      chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
+        const err = chrome.runtime.lastError;
+        if (err) return reject(err.message || String(err));
+        console.log("succcess", res);
+        resolve(res);
+      });
+    });
+  }
+};
+var gpt_handler_default = GPTHandler;
+
+// background/other-handler.ts
+var OtherHandler = class extends Handler {
+  constructor() {
+    super(MENU_ID);
+  }
+  onGenericEvent(ev) {
+    if (ev.command === "otherOpen" /* OTHER_OPEN */ && ev.url) {
+      this.setEnabled(false);
+    }
+  }
+  async onMenuClick(info, tab) {
+    return;
+  }
+};
 
 // background/background.ts
 var genericListener = new generic_listener_default();
