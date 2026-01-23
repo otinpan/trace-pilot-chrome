@@ -1,5 +1,6 @@
 import GenericListener from "./generic-listener";
 import GPTHandler from "./gpt-module/gpt-handler";
+import { OtherHandler } from "./other-handler";
 import { PdfHandler } from "./pdf-module/pdf-handler";
 
 const genericListener = new GenericListener();
@@ -9,6 +10,11 @@ genericListener.addHandler((ev) => pdfHandler.onGenericEvent(ev));
 
 const gptHandler = new GPTHandler();
 genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
+
+const otherHandler=new OtherHandler();
+genericListener.addHandler((ev)=>otherHandler.onGenericEvent(ev));
+
+
 
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

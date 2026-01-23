@@ -152,6 +152,21 @@ var GPTHandler = class extends Handler {
 };
 var gpt_handler_default = GPTHandler;
 
+// background/other-handler.ts
+var OtherHandler = class extends Handler {
+  constructor() {
+    super(MENU_ID);
+  }
+  onGenericEvent(ev) {
+    if (ev.command === "otherOpen" /* OTHER_OPEN */ && ev.url) {
+      this.setEnabled(false);
+    }
+  }
+  async onMenuClick(info, tab) {
+    return;
+  }
+};
+
 // background/pdf-module/pdf-handler.ts
 var PdfHandler = class extends Handler {
   constructor() {
@@ -266,6 +281,8 @@ var pdfHandler = new PdfHandler();
 genericListener.addHandler((ev) => pdfHandler.onGenericEvent(ev));
 var gptHandler = new gpt_handler_default();
 genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
+var otherHandler = new OtherHandler();
+genericListener.addHandler((ev) => otherHandler.onGenericEvent(ev));
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && typeof msg === "object" && msg.type === "PING") {
     sendResponse({ ok: true, from: "background" });
