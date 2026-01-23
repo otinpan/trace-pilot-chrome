@@ -74,7 +74,7 @@ export class PdfHandler extends Handler {
 
         // クリップボードに貼る文字列
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
-        const clipboardText = `${marker}\n${plainText}`;
+        const clipboardText = `${marker}\n${this.lastPlainText}`;
 
         await writeClipboardViaContent(tab.id!, clipboardText);
     }

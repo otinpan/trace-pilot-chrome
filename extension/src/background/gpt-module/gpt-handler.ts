@@ -8,6 +8,7 @@ const NATIVE_HOST_NAME="trace_pilot_host_chrome";
 export class GPTHandler extends Handler{
     threads: Map<string,GPTThread> = new Map();
     activeThread: GPTThread | null=null;
+    lastPlainText: string="";
     constructor(){
         super(MENU_ID);
     }
@@ -57,9 +58,16 @@ export class GPTHandler extends Handler{
             preIndex: resolved.preIndex,
         }).catch(()=>null as any);
 
-        console.log("succsess: clickmenu");
+        /*console.log("succsess: clickmenu");
         console.log(resolved.parentId);
-        console.log("result",result);
+        console.log("result",result);*/
+
+        let plainText=info.selectionText;
+        if(plainText===undefined){
+            return;
+        }
+        
+        this.lastPlainText=plainText;
         
     }
 }

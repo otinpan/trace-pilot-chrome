@@ -440,10 +440,15 @@ export class GPTThread{
     private makeCodeBlock(preNode: HTMLPreElement, parentId: string): CodeBlock {
         // const codeNode = preNode?.querySelector('code');
         console.log('preNode', preNode, 'preNode.innerText', preNode.innerText);
-        const code = preNode?.innerText || '';
+        const codeNode=preNode.querySelector('code');
+        const code=codeNode?.innerText?? '';
         const codeRef = preNode as HTMLElement;
+
         const surroundingText = codeRef?.innerText || '';
-        const language = preNode?.innerText.split(' ')[0] || '';
+        
+        const langClass=codeNode?.className ?? '';
+        const language=langClass.replace('language-','');
+        
         const turnParentId =
             preNode.closest('article[data-testid^="conversation-turn-"]')
                 ?.getAttribute("data-message-id")
