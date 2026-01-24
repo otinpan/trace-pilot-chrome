@@ -2,6 +2,7 @@ import GenericListener from "./generic-listener";
 import GPTHandler from "./gpt-module/gpt-handler";
 import { OtherHandler } from "./other-handler";
 import { PdfHandler } from "./pdf-module/pdf-handler";
+import { MENU_ID_GPT,MENU_ID_OTER,MENU_ID_PDF } from "../type";
 
 const genericListener = new GenericListener();
 
@@ -28,9 +29,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.runtime.onInstalled.addListener(()=>{
     chrome.contextMenus.create({
         type: "normal",
-        title: "create hash and store with trace-pilot",
+        title: "create hash and store with trace-pilot (PDF)",
         contexts: ["selection","page"],
-        id: "create_hash_and_store",
+        id: MENU_ID_PDF,
+        enabled: false
+    });
+    chrome.contextMenus.create({
+        type: "normal",
+        title: "create hash and store with trace-pilot (GPT)",
+        contexts: ["selection","page"],
+        id: MENU_ID_GPT,
         enabled: false
     });
 });

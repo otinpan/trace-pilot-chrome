@@ -1,34 +1,37 @@
 export abstract class Handler{
-    private installed=false;
+    private static installed=false;
+    private static registry=new Map<string,Handler>();
     constructor(
         protected readonly menuId: string,
     ){
+        Handler.registry.set(menuId,this);
         this.init();
     }
 
     init(){
-        if(this.installed)return;
-        this.installed=true;
+        if(Handler.installed)return;
+        Handler.installed=true;
 
-        chrome.contextMenus.onClicked.addListener(this.onClick);
+
+
+        chrome.contextMenus.onClicked.addListener(async(info,tab)=>{
+            const menuId=String(info.menuItemId);
+
+            const h=Handler.registry.get(menuId);
+            if(!h)return;
+
+            if(!tab||typeof tab.id!=="number"){
+                h.onClickMissingTab(info,tab);
+                return;
+            }
+
+            await h.onMenuClick(info,tab);
+        });
     }
 
     // 拡張機能で作成した右クリックメニューを有効・無効
     protected setEnabled(enabled: boolean) {
         chrome.contextMenus.update(this.menuId, { enabled }, () => void chrome.runtime.lastError);
-    }
-
-    private onClick=(
-        info: chrome.contextMenus.OnClickData,
-        tab?:chrome.tabs.Tab
-    )=>{
-        if(info.menuItemId !== this.menuId) return;
-
-        if(!tab||typeof tab.id!=="number"){
-            this.onClickMissingTab(info,tab);
-            return;
-        }
-        void this.onMenuClick(info,tab);
     }
 
     // クリックされたときの

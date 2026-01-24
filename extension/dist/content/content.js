@@ -397,14 +397,39 @@ chrome.runtime.onMessage.addListener(
     return true;
   }
 );
+async function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+async function waitForReady(timeoutMs = 1200) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (document.hasFocus() && document.visibilityState === "visible") return true;
+    await sleep(30);
+  }
+  return document.hasFocus() && document.visibilityState === "visible";
+}
+async function writeClipboardWithRetry(text, tries = 6) {
+  let lastErr = null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (e) {
+      lastErr = e;
+      await sleep(80);
+    }
+  }
+  throw lastErr;
+}
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind !== "TRACE_PILOT_WRITE_CLIPBOARD") return;
   (async () => {
+    const ready = await waitForReady(1500);
     try {
-      await navigator.clipboard.writeText(msg.text);
-      sendResponse({ ok: true });
+      await writeClipboardWithRetry(msg.text, 8);
+      sendResponse({ ok: true, ready });
     } catch (e) {
-      sendResponse({ ok: false, error: String(e) });
+      sendResponse({ ok: false, error: String(e?.message ?? e), ready });
     }
   })();
   return true;

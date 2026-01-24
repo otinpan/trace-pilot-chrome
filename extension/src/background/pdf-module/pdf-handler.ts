@@ -1,5 +1,5 @@
 import { 
-    MENU_ID,
+    MENU_ID_PDF,
     NATIVE_HOST_NAME,
     COMMANDS,GenericEvent,
     MessageToNativeHost, 
@@ -25,7 +25,7 @@ export class PdfHandler extends Handler {
     private lastPdf: PdfState|null=null;
     private lastPlainText: string="";
     constructor(){
-        super(MENU_ID);
+        super(MENU_ID_PDF);
     }
 
     public onGenericEvent(ev: GenericEvent){
@@ -177,16 +177,32 @@ function isLikelyPdfUrl(raw: string): boolean {
     }
 }
 
-async function focusTabAndWindow(tabId: number) {
-    const tab = await chrome.tabs.get(tabId);
-    if (tab.windowId != null) {
-        await chrome.windows.update(tab.windowId, { focused: true });
-    }
-    await chrome.tabs.update(tabId, { active: true });
-
-    // 少し待つ（フォーカス反映待ち）
-    await new Promise((r) => setTimeout(r, 50));
+async function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
+
+async function focusTabAndWindow(tabId: number) {
+  const tab = await chrome.tabs.get(tabId);
+
+  if (tab.windowId != null) {
+    await chrome.windows.update(tab.windowId, { focused: true });
+  }
+  await chrome.tabs.update(tabId, { active: true });
+
+  // 状態が反映されるまで少し待つ（確認付き）
+  for (let i = 0; i < 10; i++) {
+    const t = await chrome.tabs.get(tabId);
+    if (t.active) break;
+    await sleep(50);
+  }
+
+  // 最後にもう少し待つ（右クリック直後のフォーカス不安定対策）
+  await sleep(200);
+}
+
+
+
+
 
 // background / service worker 側
 export async function writeClipboardViaContent(tabId: number, text: string) {
@@ -202,6 +218,7 @@ export async function writeClipboardViaContent(tabId: number, text: string) {
     throw new Error(res?.error ?? "clipboard write failed");
   }
 }
+
 
 
 

@@ -1,6 +1,8 @@
 // type.ts
 var TRACE_PILOT_MARKER = "// @trace-pilot";
-var MENU_ID = "create_hash_and_store";
+var MENU_ID_PDF = "create_hash_and_store_PDF";
+var MENU_ID_GPT = "create_hash_and_store_GPT";
+var MENU_ID_OTER = "create_hash_and_store_OTHER";
 var NATIVE_HOST_NAME = "trace_pilot_host_chrome";
 
 // background/generic-listener.ts
@@ -66,24 +68,31 @@ function isLikelyPdfUrl(raw) {
 var generic_listener_default = GenericListener;
 
 // background/handler.ts
-var Handler = class {
+var Handler = class _Handler {
   constructor(menuId) {
     this.menuId = menuId;
-    this.installed = false;
-    this.onClick = (info, tab) => {
-      if (info.menuItemId !== this.menuId) return;
-      if (!tab || typeof tab.id !== "number") {
-        this.onClickMissingTab(info, tab);
-        return;
-      }
-      void this.onMenuClick(info, tab);
-    };
+    _Handler.registry.set(menuId, this);
     this.init();
   }
+  static {
+    this.installed = false;
+  }
+  static {
+    this.registry = /* @__PURE__ */ new Map();
+  }
   init() {
-    if (this.installed) return;
-    this.installed = true;
-    chrome.contextMenus.onClicked.addListener(this.onClick);
+    if (_Handler.installed) return;
+    _Handler.installed = true;
+    chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+      const menuId = String(info.menuItemId);
+      const h = _Handler.registry.get(menuId);
+      if (!h) return;
+      if (!tab || typeof tab.id !== "number") {
+        h.onClickMissingTab(info, tab);
+        return;
+      }
+      await h.onMenuClick(info, tab);
+    });
   }
   // 拡張機能で作成した右クリックメニューを有効・無効
   setEnabled(enabled) {
@@ -97,7 +106,7 @@ var Handler = class {
 // background/pdf-module/pdf-handler.ts
 var PdfHandler = class extends Handler {
   constructor() {
-    super(MENU_ID);
+    super(MENU_ID_PDF);
     this.lastPdf = null;
     this.lastPlainText = "";
   }
@@ -204,13 +213,21 @@ function isLikelyPdfUrl2(raw) {
     return raw.toLowerCase().includes(".pdf");
   }
 }
+async function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 async function focusTabAndWindow(tabId) {
   const tab = await chrome.tabs.get(tabId);
   if (tab.windowId != null) {
     await chrome.windows.update(tab.windowId, { focused: true });
   }
   await chrome.tabs.update(tabId, { active: true });
-  await new Promise((r) => setTimeout(r, 50));
+  for (let i = 0; i < 10; i++) {
+    const t = await chrome.tabs.get(tabId);
+    if (t.active) break;
+    await sleep(50);
+  }
+  await sleep(200);
 }
 async function writeClipboardViaContent(tabId, text) {
   await focusTabAndWindow(tabId);
@@ -226,7 +243,7 @@ async function writeClipboardViaContent(tabId, text) {
 // background/gpt-module/gpt-handler.ts
 var GPTHandler = class extends Handler {
   constructor() {
-    super(MENU_ID);
+    super(MENU_ID_GPT);
     this.threads = /* @__PURE__ */ new Map();
     this.activeThread = null;
     this.lastPlainText = "";
@@ -328,7 +345,7 @@ var gpt_handler_default = GPTHandler;
 // background/other-handler.ts
 var OtherHandler = class extends Handler {
   constructor() {
-    super(MENU_ID);
+    super(MENU_ID_OTER);
   }
   onGenericEvent(ev) {
     if (ev.command === "otherOpen" /* OTHER_OPEN */ && ev.url) {
@@ -358,9 +375,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     type: "normal",
-    title: "create hash and store with trace-pilot",
+    title: "create hash and store with trace-pilot (PDF)",
     contexts: ["selection", "page"],
-    id: "create_hash_and_store",
+    id: MENU_ID_PDF,
+    enabled: false
+  });
+  chrome.contextMenus.create({
+    type: "normal",
+    title: "create hash and store with trace-pilot (GPT)",
+    contexts: ["selection", "page"],
+    id: MENU_ID_GPT,
     enabled: false
   });
 });

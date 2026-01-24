@@ -1,5 +1,5 @@
 import { 
-    MENU_ID,
+    MENU_ID_OTER,
     NATIVE_HOST_NAME,
     COMMANDS,GenericEvent,
     MessageToNativeHost, 
@@ -14,7 +14,7 @@ import { Handler } from "./handler";
 // 指定していないurlが開かれたらsetEnable(false)にする
 export class OtherHandler extends Handler{
     constructor(){
-        super(MENU_ID);
+        super(MENU_ID_OTER);
     }
 
     public onGenericEvent(ev: GenericEvent){

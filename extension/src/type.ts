@@ -6,7 +6,9 @@ export const TRACE_PILOT_MARKER:string="// @trace-pilot";
 // content script に問い合わせ（レスポンス型を付ける）
 export type TracePilotResponse = { selectionText: string } | { error: string };
 
-export const MENU_ID="create_hash_and_store";
+export const MENU_ID_PDF="create_hash_and_store_PDF";
+export const MENU_ID_GPT="create_hash_and_store_GPT";
+export const MENU_ID_OTER="create_hash_and_store_OTHER";
 export const NATIVE_HOST_NAME="trace_pilot_host_chrome";
 
 export type TracePilotRequest={
@@ -22,6 +24,8 @@ export enum COMMANDS {
   GOOGLE_SEARCH = 'googleSearch',
   PDF_OPEN='pdfOpen'
 }
+
+
 
 export type GenericEvent={
     command: COMMANDS;

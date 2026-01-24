@@ -1,5 +1,5 @@
 import { 
-    MENU_ID,
+    MENU_ID_GPT,
     NATIVE_HOST_NAME,
     COMMANDS,GenericEvent,
     MessageToNativeHost, 
@@ -22,7 +22,7 @@ export class GPTHandler extends Handler{
     activeThread: GPTThread | null=null;
     lastPlainText: string="";
     constructor(){
-        super(MENU_ID);
+        super(MENU_ID_GPT);
     }
 
     public onGenericEvent(ev: GenericEvent){
@@ -154,4 +154,3 @@ export class GPTHandler extends Handler{
 }
 
 export default GPTHandler;
-
