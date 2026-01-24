@@ -21,6 +21,8 @@ type PdfState={
     updatedAt: number;
 }
 
+
+
 export class PdfHandler extends Handler {
     private lastPdf: PdfState|null=null;
     private lastPlainText: string="";

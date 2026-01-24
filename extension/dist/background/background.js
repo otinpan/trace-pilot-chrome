@@ -122,6 +122,8 @@ var PdfHandler = class extends Handler {
         updatedAt: Date.now()
       };
       this.setEnabled(true);
+    } else {
+      this.setEnabled(false);
     }
   }
   async getValideTabId(info, tab) {
@@ -150,11 +152,7 @@ var PdfHandler = class extends Handler {
       return;
     }
     const { url, isPdf } = resolvePdfUrl(rawUrl);
-    const plainText = await getSelectionFromAnyFrame(tabId);
-    if (!plainText.trim()) {
-      console.warn("selection is empty");
-      return;
-    }
+    const plainText = info.selectionText;
     console.log("plainttext", plainText);
     if (plainText === void 0) {
       return;
@@ -190,23 +188,6 @@ ${plainText}`;
     });
   }
 };
-async function getSelectionFromAnyFrame(tabId) {
-  const results = await chrome.scripting.executeScript({
-    target: { tabId, allFrames: true },
-    func: () => {
-      const sel = window.getSelection?.();
-      return {
-        href: location.href,
-        focused: document.hasFocus(),
-        text: sel ? sel.toString() : ""
-      };
-    }
-  });
-  const hit = results.map((r) => r.result).find((r) => (r.text ?? "").trim().length > 0);
-  if (hit) return hit.text;
-  console.warn("No selection text in any frame:", results.map((r) => r.result));
-  return "";
-}
 function resolvePdfUrl(tabUrl) {
   let url = tabUrl;
   try {
@@ -283,6 +264,8 @@ var GPTHandler = class extends Handler {
       }).catch(() => {
       });
       return;
+    } else {
+      this.setEnabled(false);
     }
   }
   async getValideTabId(info, tab) {
@@ -366,6 +349,23 @@ ${plainText}`;
     });
   }
 };
+async function getSelectionFromAnyFrame(tabId) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    func: () => {
+      const sel = window.getSelection?.();
+      return {
+        href: location.href,
+        focused: document.hasFocus(),
+        text: sel ? sel.toString() : ""
+      };
+    }
+  });
+  const hit = results.map((r) => r.result).find((r) => (r.text ?? "").trim().length > 0);
+  if (hit) return hit.text;
+  console.warn("No selection text in any frame:", results.map((r) => r.result));
+  return "";
+}
 var gpt_handler_default = GPTHandler;
 
 // background/other-handler.ts
