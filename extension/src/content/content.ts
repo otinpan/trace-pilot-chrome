@@ -10,6 +10,9 @@ chrome.runtime.sendMessage(
     }
 )
 
+
+
+
 function getSelectedText(): string {
   const active = document.activeElement as (HTMLInputElement | HTMLTextAreaElement | null);
 
@@ -69,11 +72,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
     return true;
 });
-
-
-
-
-
 
 
 async function sleep(ms: number) {

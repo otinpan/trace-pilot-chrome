@@ -21,8 +21,6 @@ type PdfState={
     updatedAt: number;
 }
 
-
-
 export class PdfHandler extends Handler {
     private lastPdf: PdfState|null=null;
     private lastPlainText: string="";
@@ -228,5 +226,17 @@ export async function writeClipboardViaContent(tabId: number, text: string) {
 }
 
 
+// @trace-pilot ba45144790ca821c57418ac087810dd5f26e42be
+fn main() {
+    greet("Otin");
+    let sum = add(3, 5);
+    println!("3 + 5 = {}", sum);
+}
 
+fn greet(name: &str) {
+    println!("Hello, {}!", name);
+}
 
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}

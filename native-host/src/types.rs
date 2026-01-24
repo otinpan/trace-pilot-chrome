@@ -47,8 +47,24 @@ pub struct ChromePDFHash{
 pub struct GPTHash{
     pub promptHash:String,
     pub generatedHash: String,
+
+    #[serde(default)]
+    pub codeBlockHashes: Vec<CodeBlockHash>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodeBlockHash {
+    pub index: usize,
+    pub codeHash: String,
+
+    // あると便利（後で紐付けに使える）
+    #[serde(default)]
+    pub language: Option<String>,
+    #[serde(default)]
+    pub parentId: Option<String>,
+    #[serde(default)]
+    pub turnParentId: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]

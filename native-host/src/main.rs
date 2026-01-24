@@ -168,6 +168,21 @@ async fn hash_and_store_gpt(url: String,plain_text:String,data:types::GPTData)->
     let response_hash
         =hash_and_store::calculate_hash_and_store_text(cwd, bot_response)?;
     
+    let mut cb_hashes: Vec<types::CodeBlockHash> 
+        = Vec::with_capacity(thread_pair.codeBlocks.len());
+
+    for(i,cb) in thread_pair.codeBlocks.iter().enumerate(){
+        let code_hash = hash_and_store::calculate_hash_and_store_text(cwd, cb.code.as_str())?;
+
+        cb_hashes.push(types::CodeBlockHash{
+            index: i,
+            codeHash: code_hash,
+            language: Some(cb.language.clone()),
+            parentId: Some(cb.parentId.clone()),
+            turnParentId:Some(cb.turnParentId.clone()),
+        });
+    }
+    
 
     let meta = types::Metadata {
         originalHash: original_hash,
@@ -176,6 +191,7 @@ async fn hash_and_store_gpt(url: String,plain_text:String,data:types::GPTData)->
                 types::GPTHash{
                     promptHash: prompt_hash,
                     generatedHash: response_hash,
+                    codeBlockHashes: cb_hashes,
                 }
             )
         ),
