@@ -55,22 +55,29 @@ chrome.runtime.onMessage.addListener(
 
 
 // 選択した範囲を開業を含めて返す
-chrome.runtime.onMessage.addListener((msg,_sender,sendResponse)=>{
-    if(msg?.kind!=="TRACE_PILOT_GET_SELECTION_WITH_BREAKES")return;
-    try{
-        const text = window.getSelection?.();
-        if(!(!text||text.rangeCount===0)){
-            sendResponse({ok:true,text});
-        }
-    }catch (e:any){
-        sendResponse({ok:false,error:String(e?.message ?? e)});
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg?.kind !== "TRACE_PILOT_GET_SELECTION_WITH_BREAKES") return;
+
+    try {
+        const sel = window.getSelection?.();
+        const text = sel ? sel.toString() : "";
+        console.log("text",text);
+        sendResponse({ ok: true, text });
+    } catch (e: any) {
+        sendResponse({ ok: false, error: String(e?.message ?? e) });
     }
-})
+
+    return true;
+});
+
+
+
+
 
 
 
 async function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+    return new Promise((r) => setTimeout(r, ms));
 }
 
 async function waitForReady(timeoutMs = 1200): Promise<boolean> {

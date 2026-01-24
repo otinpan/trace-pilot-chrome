@@ -10,7 +10,7 @@ import {
 } from "../../type";
 import { Handler } from "../handler";
 import { GPTThread } from "../../content/gpt-module/gpt-thread";
-import { writeClipboardViaContent } from "../pdf-module/pdf-handler";
+import { writeClipboardViaContent} from "../pdf-module/pdf-handler";
 import { CodeBlock,ThreadPair } from "../../content/gpt-module/gpt-thread";
 
 type ClickInfoExt = chrome.contextMenus.OnClickData & { tabId?: number };
@@ -24,6 +24,7 @@ export class GPTHandler extends Handler{
     constructor(){
         super(MENU_ID_GPT);
     }
+
 
     public onGenericEvent(ev: GenericEvent){
         if(ev.command===COMMANDS.GPT_OPEN&&ev.url&&ev.title){
@@ -100,8 +101,13 @@ export class GPTHandler extends Handler{
         console.log(resolved.parentId);
         console.log("result",result);
 
+        // 改行を含めて保存
+        const plainText= await getSelectionFromAnyFrame(tabId);
+        if(!plainText.trim()){
+            console.warn("selection is empty");
+            return;
+        }
 
-        let plainText=info.selectionText;
         if(plainText===undefined){
             return;
         }
@@ -151,6 +157,31 @@ export class GPTHandler extends Handler{
             });
         })
     }
+}
+
+export async function getSelectionFromAnyFrame(tabId: number): Promise<string> {
+    const results = await chrome.scripting.executeScript({
+        target: { tabId, allFrames: true },
+        func: () => {
+            const sel = window.getSelection?.();
+            return {
+                href: location.href,
+                focused: document.hasFocus(),
+                text: sel ? sel.toString() : "",
+            };
+        },
+    });
+
+    // 文字が取れたフレームを優先
+    const hit = results
+        .map(r => r.result as { href: string; focused: boolean; text: string })
+        .find(r => (r.text ?? "").trim().length > 0);
+
+    if (hit) return hit.text;
+
+    // 取れなかった場合、デバッグ用にどのフレームが見えてたかログれる
+    console.warn("No selection text in any frame:", results.map(r => r.result));
+    return "";
 }
 
 export default GPTHandler;

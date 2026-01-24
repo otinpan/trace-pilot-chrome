@@ -67,8 +67,8 @@ export class PdfHandler extends Handler {
         return null;
     }
 
-    
 
+    
     // クリックされたとき
     protected override async onMenuClick(
         info: chrome.contextMenus.OnClickData,
@@ -95,7 +95,8 @@ export class PdfHandler extends Handler {
 
         const { url, isPdf } = resolvePdfUrl(rawUrl);
 
-        let plainText=info.selectionText;
+        const plainText= info.selectionText;
+        console.log("plainttext",plainText);
         if(plainText===undefined){
             return;
         }
@@ -137,6 +138,9 @@ export class PdfHandler extends Handler {
         })
     }
 }
+
+
+
 
 
 // PDFのurlを読み取れる形に変形
