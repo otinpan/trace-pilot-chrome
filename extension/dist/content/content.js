@@ -397,6 +397,18 @@ chrome.runtime.onMessage.addListener(
     return true;
   }
 );
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.kind !== "TRACE_PILOT_GET_SELECTION_WITH_BREAKES") return;
+  try {
+    const sel = window.getSelection?.();
+    const text = sel ? sel.toString() : "";
+    console.log("text", text);
+    sendResponse({ ok: true, text });
+  } catch (e) {
+    sendResponse({ ok: false, error: String(e?.message ?? e) });
+  }
+  return true;
+});
 async function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }

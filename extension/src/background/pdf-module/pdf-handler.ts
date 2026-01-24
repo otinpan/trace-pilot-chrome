@@ -43,6 +43,8 @@ export class PdfHandler extends Handler {
             }
             
             this.setEnabled(true);
+        }else{
+            this.setEnabled(false);
         }
     }
 

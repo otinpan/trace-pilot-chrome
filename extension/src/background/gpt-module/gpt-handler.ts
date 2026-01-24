@@ -42,7 +42,8 @@ export class GPTHandler extends Handler{
 
             });
             return;
-
+        }else{
+            this.setEnabled(false);
         }
     }
 

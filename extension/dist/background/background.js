@@ -150,7 +150,12 @@ var PdfHandler = class extends Handler {
       return;
     }
     const { url, isPdf } = resolvePdfUrl(rawUrl);
-    let plainText = info.selectionText;
+    const plainText = await getSelectionFromAnyFrame(tabId);
+    if (!plainText.trim()) {
+      console.warn("selection is empty");
+      return;
+    }
+    console.log("plainttext", plainText);
     if (plainText === void 0) {
       return;
     }
@@ -185,6 +190,23 @@ ${plainText}`;
     });
   }
 };
+async function getSelectionFromAnyFrame(tabId) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    func: () => {
+      const sel = window.getSelection?.();
+      return {
+        href: location.href,
+        focused: document.hasFocus(),
+        text: sel ? sel.toString() : ""
+      };
+    }
+  });
+  const hit = results.map((r) => r.result).find((r) => (r.text ?? "").trim().length > 0);
+  if (hit) return hit.text;
+  console.warn("No selection text in any frame:", results.map((r) => r.result));
+  return "";
+}
 function resolvePdfUrl(tabUrl) {
   let url = tabUrl;
   try {
@@ -301,7 +323,11 @@ var GPTHandler = class extends Handler {
     console.log("succsess: clickmenu");
     console.log(resolved.parentId);
     console.log("result", result);
-    let plainText = info.selectionText;
+    const plainText = await getSelectionFromAnyFrame(tabId);
+    if (!plainText.trim()) {
+      console.warn("selection is empty");
+      return;
+    }
     if (plainText === void 0) {
       return;
     }
