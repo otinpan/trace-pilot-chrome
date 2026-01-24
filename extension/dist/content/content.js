@@ -111,7 +111,7 @@ var GPTThread = class {
       if (msg?.kind === "RESOLVE_LAST_TARGET") {
         if (!this.lastTarget) {
           sendResponse({ ok: false, reason: "no lastTarget" });
-          return;
+          return true;
         }
         sendResponse({
           ok: true,
@@ -125,13 +125,14 @@ var GPTThread = class {
         const parentId = msg.parentId;
         const preIndex = msg.preIndex;
         const result = this.threadItems.get(parentId);
-        if (result) {
-          sendResponse({
-            ok: true,
-            result
-          });
+        if (!result) {
+          sendResponse({ ok: false, reason: "threadItem not found", parentId, preIndex });
+          return true;
         }
+        sendResponse({ ok: true, result });
+        return true;
       }
+      return false;
     });
   }
   initPageObserver() {

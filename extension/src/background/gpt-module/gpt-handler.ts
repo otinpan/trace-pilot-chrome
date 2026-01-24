@@ -82,9 +82,16 @@ export class GPTHandler extends Handler{
         }
 
         // イベントが発火したことを通知 → parentIdの取得
-        const resolved=await chrome.tabs.sendMessage(tabId,{
-            kind:"RESOLVE_LAST_TARGET",
-        }).catch(()=>null as any);
+        let resolved:any;
+        try{
+            resolved=await chrome.tabs.sendMessage(tabId,{
+                kind:"RESOLVE_LAST_TARGET",
+            }).catch(()=>null as any);
+        }catch(e){
+            console.warn("sendMessage RESOLVE_LAST_TARGET failed:", e);
+            return;
+        }
+        
 
         if(!resolved?.ok){
             console.warn("No target:",resolved?.reason);
@@ -92,11 +99,22 @@ export class GPTHandler extends Handler{
         }
 
         // parentIdを渡す → threadPairを取得
-        const result=await chrome.tabs.sendMessage(tabId,{
-            kind: "FORCE_RESPONSE_THREADPAIR",
-            parentId: resolved.parentId,
-            preIndex: resolved.preIndex,
-        }).catch(()=>null as any);
+        let result:any;
+        try{
+            result=await chrome.tabs.sendMessage(tabId,{
+                kind: "FORCE_RESPONSE_THREADPAIR",
+                parentId: resolved.parentId,
+                preIndex: resolved.preIndex,
+            });
+        }catch(e){
+            console.warn("sendMessage FORCE_RESPONSE_THREADPAIR failed:", e);
+            return;
+        }
+        
+        if(!result){
+            console.warn("FORCE_RESPONSE_THREADPAIR returned empty:", result);
+            return;
+        }
 
         console.log("succsess: clickmenu");
         console.log(resolved.parentId);

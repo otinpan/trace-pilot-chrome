@@ -98,7 +98,7 @@ export class GPTThread{
             if(msg?.kind==="RESOLVE_LAST_TARGET"){
                 if(!this.lastTarget){
                     sendResponse({ok:false,reason:"no lastTarget"});
-                    return;
+                    return true;
                 }
 
                 sendResponse({
@@ -116,13 +116,15 @@ export class GPTThread{
                 const preIndex:number|null=msg.preIndex;
 
                 const result=this.threadItems.get(parentId);
-                if(result){
-                    sendResponse({
-                        ok:true,
-                        result: result
-                    });
+                if(!result){
+                    sendResponse({ ok: false, reason: "threadItem not found", parentId, preIndex });
+                    return true;
                 }
+                sendResponse({ok:true,result:result});
+                return true;
             }
+
+            return false;
         });
     }
 
@@ -355,6 +357,8 @@ export class GPTThread{
             console.log("threadItems after response:",this.threadItems);
             this.reset();
         },5000);
+
+        
     }
 
     // codeBlockを上書き
@@ -500,3 +504,4 @@ export class GPTThread{
     }    
 
 }
+

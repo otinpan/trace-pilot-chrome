@@ -7,7 +7,7 @@ mod hash_and_store;
 mod get_bytes_from_url;
 mod types;
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct Response {
     metaHash: String,
 }
@@ -22,8 +22,8 @@ async fn async_main() -> Result<()> {
     let input = read_input().context("read_input failed")?;
 
     eprintln!("raw input bytes = {}", input.len());
-eprintln!("{}", String::from_utf8_lossy(&input));
-eprintln!("first char = {:?}", String::from_utf8_lossy(&input).chars().next());
+    eprintln!("{}", String::from_utf8_lossy(&input));
+    eprintln!("first char = {:?}", String::from_utf8_lossy(&input).chars().next());
 
 
     let req: types::RequestFromChrome = serde_json::from_slice(&input)
@@ -50,6 +50,7 @@ eprintln!("first char = {:?}", String::from_utf8_lossy(&input).chars().next());
 
     let resp = Response { metaHash: meta_hash };
     let resp_json = serde_json::to_vec(&resp).context("failed to serialize response")?;
+    eprintln!("resp {}",resp.metaHash);
     write_output_bytes(&resp_json).context("write_output failed")?;
 
     Ok(())

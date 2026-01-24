@@ -291,18 +291,34 @@ var GPTHandler = class extends Handler {
     if (!rawUrl) {
       return;
     }
-    const resolved = await chrome.tabs.sendMessage(tabId, {
-      kind: "RESOLVE_LAST_TARGET"
-    }).catch(() => null);
+    let resolved;
+    try {
+      resolved = await chrome.tabs.sendMessage(tabId, {
+        kind: "RESOLVE_LAST_TARGET"
+      }).catch(() => null);
+    } catch (e) {
+      console.warn("sendMessage RESOLVE_LAST_TARGET failed:", e);
+      return;
+    }
     if (!resolved?.ok) {
       console.warn("No target:", resolved?.reason);
       return;
     }
-    const result = await chrome.tabs.sendMessage(tabId, {
-      kind: "FORCE_RESPONSE_THREADPAIR",
-      parentId: resolved.parentId,
-      preIndex: resolved.preIndex
-    }).catch(() => null);
+    let result;
+    try {
+      result = await chrome.tabs.sendMessage(tabId, {
+        kind: "FORCE_RESPONSE_THREADPAIR",
+        parentId: resolved.parentId,
+        preIndex: resolved.preIndex
+      });
+    } catch (e) {
+      console.warn("sendMessage FORCE_RESPONSE_THREADPAIR failed:", e);
+      return;
+    }
+    if (!result) {
+      console.warn("FORCE_RESPONSE_THREADPAIR returned empty:", result);
+      return;
+    }
     console.log("succsess: clickmenu");
     console.log(resolved.parentId);
     console.log("result", result);
