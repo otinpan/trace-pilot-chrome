@@ -231,7 +231,6 @@ export class GPTThread{
 
         const msg=this.tempUserMessage;
         if(!msg||msg.length===0){
-            console.log("stored user message=undefined:",this.tempUserMessage);
             return;
         }
 
@@ -358,7 +357,7 @@ export class GPTThread{
             this.reset();
         },5000);
 
-        
+        console.log("threadItems: ",this.threadItems);
     }
 
     // codeBlockを上書き

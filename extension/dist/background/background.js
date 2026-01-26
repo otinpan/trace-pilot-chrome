@@ -345,7 +345,7 @@ var GPTHandler = class extends Handler {
       url: rawUrl,
       plain_text: plainText
     };
-    console.log(msg);
+    console.log("message to native host: ", msg);
     let res = await this.sendToNativeHost(msg);
     const metaHash = res.metaHash;
     const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;

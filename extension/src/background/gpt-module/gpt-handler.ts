@@ -153,16 +153,15 @@ export class GPTHandler extends Handler{
 
 
 
-        console.log(msg);
+        console.log("message to native host: ",msg);
         let res=await this.sendToNativeHost(msg);
         const metaHash=res.metaHash;
-
+        
          // クリップボードに貼る文字列
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}\n${plainText}`;
         
         await writeClipboardViaContent(tab.id!, clipboardText);
-
     }
 
     private sendToNativeHost(message: any):Promise<any>{
@@ -204,3 +203,7 @@ export async function getSelectionFromAnyFrame(tabId: number): Promise<string> {
 }
 
 export default GPTHandler;
+
+
+
+

@@ -38,7 +38,6 @@ var GPTThread = class {
       if (!mutationList.length) return;
       const msg = this.tempUserMessage;
       if (!msg || msg.length === 0) {
-        console.log("stored user message=undefined:", this.tempUserMessage);
         return;
       }
       for (const mutation of mutationList) {
@@ -243,6 +242,7 @@ var GPTThread = class {
       console.log("threadItems after response:", this.threadItems);
       this.reset();
     }, 5e3);
+    console.log("threadItems: ", this.threadItems);
   }
   // codeBlockを上書き
   updateCodeBlock(codeBlock) {

@@ -145,6 +145,7 @@ export class PdfHandler extends Handler {
 
 
 
+
 // PDFのurlを読み取れる形に変形
 function resolvePdfUrl(tabUrl: string): { url: string; isPdf: boolean } {
     let url = tabUrl;
@@ -215,13 +216,15 @@ export async function writeClipboardViaContent(tabId: number, text: string) {
    await focusTabAndWindow(tabId);
 
     // content script にメッセージ送信
-  const res = await chrome.tabs.sendMessage(tabId, {
-    kind: "TRACE_PILOT_WRITE_CLIPBOARD",
-    text,
-  });
+    const res = await chrome.tabs.sendMessage(tabId, {
+        kind: "TRACE_PILOT_WRITE_CLIPBOARD",
+        text,
+    });
 
-  if (!res?.ok) {
-    throw new Error(res?.error ?? "clipboard write failed");
-  }
+
+    if (!res?.ok) {
+        throw new Error(res?.error ?? "clipboard write failed");
+    }
 }
+
 
