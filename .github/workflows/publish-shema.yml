@@ -31,8 +31,8 @@ jobs:
 
           
           mkdir -p contracts
-          cp native-host/schemas/nativehost.schema.json contracts/nativehost.schema.json
+          cp fixutres/native_to_vscode/schema.json
 
-          git add contracts/nativehost.schema.json
+          git add contracts/schema.json
           git commit -m "Update nativehost schema" || exit 0
           git push origin schema
