@@ -10,9 +10,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate fixtures
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      
+      - name: Install deps for fixtures
+        working-directory: ./extension
+        run: npm ci
+      
+      - name: Generate fixtures from TS schema
         working-directory: ./extension
         run: ./build_mock.sh
+
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
