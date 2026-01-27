@@ -8,12 +8,12 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/chekout@v4
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          chache: npm
+          cache: npm
       
       - name: Install node deps
         run: npm ci
