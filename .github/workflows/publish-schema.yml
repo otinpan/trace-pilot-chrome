@@ -22,17 +22,29 @@ jobs:
 
       - name: Publish to schema branch
         run: |
+          set -euxo pipefail
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
+
+          SCHEMA_TMP="$(mktemp)"
+          cp fixtures/native_to_vscode/schema.json "$SCHEMA_TMP"
+
           # schema ブランチを用意
           git fetch origin schema || true
-          git switch -c schema || git switch schema
 
-          
+          if git show-ref --verify --quiet refs/remotes/origin/schema; then
+            git switch schema
+          else
+            git switch --orphan schema
+            git rm -rf . || true
+          fi
+
           mkdir -p contracts
-          cp fixutres/native_to_vscode/schema.json
+          cp "$SCHEMA_TMP" contracts/schema.json
 
           git add contracts/schema.json
           git commit -m "Update nativehost schema" || exit 0
-          git push origin schema
+          git push -u origin schema
+
