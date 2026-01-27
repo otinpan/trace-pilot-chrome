@@ -9,6 +9,8 @@ function main(){
   const outDir=path.resolve("../fixtures/generated");
   fs.mkdirSync(outDir,{recursive:true});
 
+
+
   const mock0=mockFromSchema(MessageToNativeHostSchema,0);
   const mock1=mockFromSchema(MessageToNativeHostSchema,1);
   const mock2=mockFromSchema(MessageToNativeHostSchema,2);
