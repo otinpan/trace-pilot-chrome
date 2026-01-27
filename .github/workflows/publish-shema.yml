@@ -1,0 +1,38 @@
+name: publish-schema
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "native-host/**"
+      - ".github/workflows/publish-schema.yml"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate schema
+        working-directory: native-host
+        run: |
+          mkdir -p schemas
+          cargo run -p schema-gen > ../fixtures/native_to_vscode/schema.json
+
+      - name: Publish to schema branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          # schema ブランチを用意
+          git fetch origin schema || true
+          git switch -c schema || git switch schema
+
+          
+          mkdir -p contracts
+          cp native-host/schemas/nativehost.schema.json contracts/nativehost.schema.json
+
+          git add contracts/nativehost.schema.json
+          git commit -m "Update nativehost schema" || exit 0
+          git push origin schema

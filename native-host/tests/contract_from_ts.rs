@@ -4,7 +4,7 @@ use native_host::types::RequestFromChrome;
 
 #[test]
 fn ts_generated_json_should_desirialize(){
-    let dir=Path::new("../fixtures/generated");
+    let dir=Path::new("../fixtures/chrome_to_native");
     let mut ok=0;
 
     for entry in fs::read_dir(dir).expect("read fixtures dir"){

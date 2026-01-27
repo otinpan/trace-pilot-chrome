@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub enum WebInfoSource {
     #[serde(rename = "CHAT_GPT")]
     ChatGpt,
@@ -13,7 +14,7 @@ pub enum WebInfoSource {
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct Metadata {
     pub originalHash: String,
     pub additionalHash: Option<AdditionalHash>,
@@ -25,7 +26,7 @@ pub struct Metadata {
     pub additionalMetaData: Option<AdditionalMetadata>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 #[serde(untagged)]
 pub enum AdditionalHash{
     VSCodeHash(VSCodeHash),
@@ -33,17 +34,17 @@ pub enum AdditionalHash{
     GPTHash(GPTHash),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct VSCodeHash{
     pub fullTextHash: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct ChromePDFHash{
     pub fullTextHash:String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct GPTHash{
     pub promptHash:String,
     pub generatedHash: String,
@@ -52,7 +53,7 @@ pub struct GPTHash{
     pub codeBlockHashes: Vec<CodeBlockHash>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct CodeBlockHash {
     pub index: usize,
     pub codeHash: String,
@@ -66,7 +67,7 @@ pub struct CodeBlockHash {
     pub turnParentId: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 #[serde(untagged)]
 pub enum AdditionalMetadata {
     GPTMetadata(GPTMetadata),
@@ -74,18 +75,18 @@ pub enum AdditionalMetadata {
     ChromePDFMetadata(ChromePDFMetadata),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct VSCodeMetadata {
     pub isText: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct ChromePDFMetadata{
     pub isText:bool,
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct GPTMetadata {
     pub isText: bool,
 }

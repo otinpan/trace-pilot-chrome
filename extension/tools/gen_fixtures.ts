@@ -6,7 +6,7 @@ import { MessageToNativeHostSchema,ThreadPairSchema,CodeBlockSchema } from "../s
 import { mockFromSchema } from "./zod_mock.ts";
 
 function main(){
-  const outDir=path.resolve("../fixtures/generated");
+  const outDir=path.resolve("../fixtures/chrome_to_native");
   fs.mkdirSync(outDir,{recursive:true});
 
 
@@ -33,3 +33,4 @@ function main(){
 
 
 main();
+

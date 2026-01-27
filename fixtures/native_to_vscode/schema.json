@@ -1,0 +1,202 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Metadata",
+  "type": "object",
+  "required": [
+    "originalHash",
+    "timeCopied",
+    "timeCopiedNumber",
+    "type",
+    "url"
+  ],
+  "properties": {
+    "additionalHash": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/AdditionalHash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "additionalMetaData": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/AdditionalMetadata"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "originalHash": {
+      "type": "string"
+    },
+    "timeCopied": {
+      "type": "string"
+    },
+    "timeCopiedNumber": {
+      "type": "integer",
+      "format": "int64"
+    },
+    "type": {
+      "$ref": "#/definitions/WebInfoSource"
+    },
+    "url": {
+      "type": "string"
+    }
+  },
+  "definitions": {
+    "AdditionalHash": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/VSCodeHash"
+        },
+        {
+          "$ref": "#/definitions/ChromePDFHash"
+        },
+        {
+          "$ref": "#/definitions/GPTHash"
+        }
+      ]
+    },
+    "AdditionalMetadata": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/GPTMetadata"
+        },
+        {
+          "$ref": "#/definitions/VSCodeMetadata"
+        },
+        {
+          "$ref": "#/definitions/ChromePDFMetadata"
+        }
+      ]
+    },
+    "ChromePDFHash": {
+      "type": "object",
+      "required": [
+        "fullTextHash"
+      ],
+      "properties": {
+        "fullTextHash": {
+          "type": "string"
+        }
+      }
+    },
+    "ChromePDFMetadata": {
+      "type": "object",
+      "required": [
+        "isText"
+      ],
+      "properties": {
+        "isText": {
+          "type": "boolean"
+        }
+      }
+    },
+    "CodeBlockHash": {
+      "type": "object",
+      "required": [
+        "codeHash",
+        "index"
+      ],
+      "properties": {
+        "codeHash": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "language": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parentId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "turnParentId": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "GPTHash": {
+      "type": "object",
+      "required": [
+        "generatedHash",
+        "promptHash"
+      ],
+      "properties": {
+        "codeBlockHashes": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CodeBlockHash"
+          }
+        },
+        "generatedHash": {
+          "type": "string"
+        },
+        "promptHash": {
+          "type": "string"
+        }
+      }
+    },
+    "GPTMetadata": {
+      "type": "object",
+      "required": [
+        "isText"
+      ],
+      "properties": {
+        "isText": {
+          "type": "boolean"
+        }
+      }
+    },
+    "VSCodeHash": {
+      "type": "object",
+      "required": [
+        "fullTextHash"
+      ],
+      "properties": {
+        "fullTextHash": {
+          "type": "string"
+        }
+      }
+    },
+    "VSCodeMetadata": {
+      "type": "object",
+      "required": [
+        "isText"
+      ],
+      "properties": {
+        "isText": {
+          "type": "boolean"
+        }
+      }
+    },
+    "WebInfoSource": {
+      "type": "string",
+      "enum": [
+        "CHAT_GPT",
+        "CHROME_PDF",
+        "VSCODE",
+        "OTHER"
+      ]
+    }
+  }
+}
