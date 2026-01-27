@@ -1,0 +1,29 @@
+name: protocol-ci
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/chekout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          chache: npm
+      
+      - name: Install node deps
+        run: npm ci
+      
+      - name: Generate fixtures from TS schema
+        run: ./extension/build_mock.sh
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run rust tests (deserialize fixtures)
+        working-directory: ./native-host
+        run: cargo test

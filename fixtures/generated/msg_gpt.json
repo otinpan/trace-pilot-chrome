@@ -1,0 +1,24 @@
+{
+  "type": "CHAT_GPT",
+  "url": "mock_string",
+  "plain_text": "mock_string",
+  "data": {
+    "thread_pair": {
+      "id": "mock_string",
+      "time": 1700000000,
+      "userMessage": "mock_string",
+      "botResponse": "mock_string",
+      "codeBlocks": [
+        {
+          "code": "mock_string",
+          "codeRef": "mock_string",
+          "copied": true,
+          "surroundingText": "mock_string",
+          "language": "mock_string",
+          "parentId": "mock_string",
+          "turnParentId": "mock_string"
+        }
+      ]
+    }
+  }
+}

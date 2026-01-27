@@ -75,3 +75,4 @@ export interface PDFData{
 export interface GPTData{
     thread_pair: ThreadPair,
 }
+
