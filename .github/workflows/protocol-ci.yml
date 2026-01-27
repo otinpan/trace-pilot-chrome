@@ -1,35 +1,22 @@
-name: protocol-ci
+- uses: actions/checkout@v4
 
-on:
-  push:
-    branches: [main]
+- uses: actions/setup-node@v4
+  with:
+    node-version: 20
+    cache: npm
+    cache-dependency-path: extension/package-lock.json
 
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+- name: Install deps (for fixture generator)
+  working-directory: ./extension
+  run: npm ci
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: extension/package-lock.json
-      
-      - name: Install deps for fixtures
-        working-directory: ./extension
-        run: npm ci
-      
-      - name: Generate fixtures from TS schema
-        working-directory: ./extension
-        run: ./build_mock.sh
+- name: Generate fixtures from TS schema
+  working-directory: ./extension
+  run: ./build_mock.sh
 
+- uses: dtolnay/rust-toolchain@stable
+- uses: Swatinem/rust-cache@v2
 
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Run rust tests (deserialize fixtures)
-        working-directory: ./native-host
-        run: cargo test
-
-
+- name: Run rust tests (deserialize fixtures)
+  working-directory: ./native-host
+  run: cargo test
