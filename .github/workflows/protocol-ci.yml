@@ -10,15 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      
-      - name: Install node deps
-        run: npm ci
-      
-      - name: Generate fixtures from TS schema
+      - name: Generate fixtures
         run: ./extension/build_mock.sh
 
       - uses: dtolnay/rust-toolchain@stable
@@ -27,3 +19,4 @@ jobs:
       - name: Run rust tests (deserialize fixtures)
         working-directory: ./native-host
         run: cargo test
+
