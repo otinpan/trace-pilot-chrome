@@ -6,8 +6,8 @@ on:
       - "native-host/**"
       - ".github/workflows/publish-schema.yml"
 
-    permissions:
-      contents: write
+permissions:
+  contents: write
 
 jobs:
   publish:
