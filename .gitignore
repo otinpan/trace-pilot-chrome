@@ -1,1 +1,3 @@
 .trace-worktree
+native-host/target/
+**/target/

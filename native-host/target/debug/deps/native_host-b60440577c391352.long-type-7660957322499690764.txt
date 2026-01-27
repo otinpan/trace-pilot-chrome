@@ -1,1 +1,0 @@
-for<'a> fn(_, &'a str) -> Result<std::string::String, anyhow::Error> {calculate_hash_and_store_text::<_>}
