@@ -93,6 +93,7 @@ var Handler;
 var init_handler = __esm({
   "background/handler.ts"() {
     "use strict";
+    init_type();
     Handler = class _Handler {
       constructor(menuId) {
         this.menuId = menuId;
@@ -108,15 +109,16 @@ var init_handler = __esm({
       init() {
         if (_Handler.installed) return;
         _Handler.installed = true;
-        chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-          const menuId = String(info.menuItemId);
-          const h = _Handler.registry.get(menuId);
-          if (!h) return;
-          if (!tab || typeof tab.id !== "number") {
-            h.onClickMissingTab(info, tab);
-            return;
-          }
-          await h.onMenuClick(info, tab);
+      }
+      async sendToNativeHost(message) {
+        return new Promise((resolve, reject) => {
+          console.log("send message to native host (git): ", message);
+          chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
+            const err = chrome.runtime.lastError;
+            if (err) return reject(err.message || String(err));
+            console.log("success", res);
+            resolve(res);
+          });
         });
       }
       // 拡張機能で作成した右クリックメニューを有効・無効
@@ -226,8 +228,11 @@ var init_pdf_handler = __esm({
         if (active?.id != null && active.id >= 0) return active.id;
         return null;
       }
+      async handleRepoClick(info, tab, repoPath) {
+        await this.onMenuClick(info, tab, repoPath);
+      }
       // クリックされたとき
-      async onMenuClick(info, tab) {
+      async onMenuClick(info, tab, repoPath) {
         const tabId = await this.getValideTabId(info, tab);
         if (tabId == null || tabId < 0) {
           console.error("no valide tabId", tabId);
@@ -254,7 +259,8 @@ var init_pdf_handler = __esm({
           type: "CHROME_PDF" /* CHROME_PDF */,
           data: {},
           url,
-          plain_text: plainText
+          plain_text: plainText,
+          repoPath
         };
         let res = await this.sendToNativeHost(msg);
         const metaHash = res.metaHash;
@@ -262,17 +268,6 @@ var init_pdf_handler = __esm({
         const clipboardText = `${marker}
 ${plainText}`;
         await writeClipboardViaContent(tabId, clipboardText);
-      }
-      sendToNativeHost(message) {
-        return new Promise((resolve, reject) => {
-          console.log("send message to native host (pdf): ", message);
-          chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
-            const err = chrome.runtime.lastError;
-            if (err) return reject(err.message || String(err));
-            console.log("succcess", res);
-            resolve(res);
-          });
-        });
       }
     };
   }
@@ -339,7 +334,10 @@ var init_gpt_handler = __esm({
         if (active?.id != null && active.id >= 0) return active.id;
         return null;
       }
-      async onMenuClick(info, tab) {
+      async handleRepoClick(info, tab, repoPath) {
+        await this.onMenuClick(info, tab, repoPath);
+      }
+      async onMenuClick(info, tab, repoPath) {
         const tabId = await this.getValideTabId(info, tab);
         if (tabId == null || tabId < 0) {
           console.error("no valide tabId", tabId);
@@ -402,7 +400,8 @@ var init_gpt_handler = __esm({
           type: "CHAT_GPT" /* CHAT_GPT */,
           data: { thread_pair: sanitized },
           url: rawUrl,
-          plain_text: plainText
+          plain_text: plainText,
+          repoPath
         };
         console.log("message to native host: ", msg);
         let res = await this.sendToNativeHost(msg);
@@ -411,17 +410,6 @@ var init_gpt_handler = __esm({
         const clipboardText = `${marker}
 ${plainText}`;
         await writeClipboardViaContent(tab.id, clipboardText);
-      }
-      sendToNativeHost(message) {
-        return new Promise((resolve, reject) => {
-          console.log("send message to native host (gpt): ", message);
-          chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
-            const err = chrome.runtime.lastError;
-            if (err) return reject(err.message || String(err));
-            console.log("succcess", res);
-            resolve(res);
-          });
-        });
       }
     };
     gpt_handler_default = GPTHandler;
@@ -451,6 +439,140 @@ var init_other_handler = __esm({
   }
 });
 
+// background/menu-manager.ts
+function encodedRepoId(repoPath) {
+  return encodeURIComponent(repoPath);
+}
+function decodedRepoId(encoded) {
+  return decodeURIComponent(encoded);
+}
+function makeChildIdPdf(repoPath) {
+  return CHILD_PREFIX_PDF + encodedRepoId(repoPath);
+}
+function makeChildIdGpt(repoPath) {
+  return CHILD_PREFIX_GPT + encodedRepoId(repoPath);
+}
+var CHILD_PREFIX_PDF, CHILD_PREFIX_GPT, MenuManager;
+var init_menu_manager = __esm({
+  "background/menu-manager.ts"() {
+    "use strict";
+    init_type();
+    CHILD_PREFIX_PDF = "tp:repo:pdf:";
+    CHILD_PREFIX_GPT = "tp:repo:gpt:";
+    MenuManager = class {
+      constructor(pdfHandler, gptHandler) {
+        this.pdfHandler = pdfHandler;
+        this.gptHandler = gptHandler;
+        this.cachedRepos = [];
+        this.init();
+        this.listenClicks();
+        void this.refreshReposAndMenus();
+      }
+      init() {
+        chrome.runtime.onInstalled.addListener(() => {
+          chrome.contextMenus.create({
+            type: "normal",
+            title: "create hash and store with trace-pilot (PDF)",
+            contexts: ["selection", "page"],
+            id: MENU_ID_PDF,
+            enabled: false
+          });
+          chrome.contextMenus.create({
+            type: "normal",
+            title: "create hash and store with trace-pilot (GPT)",
+            contexts: ["selection", "page"],
+            id: MENU_ID_GPT,
+            enabled: false
+          });
+        });
+      }
+      async refreshReposAndMenus() {
+        const repos = await this.getGitRepos();
+        this.cachedRepos = repos;
+        await this.rebuildMenus(repos);
+      }
+      async getGitRepos() {
+        const msg = {
+          type: "GET_GIT" /* GET_GIT */,
+          data: null
+        };
+        let res = await this.sendToNativeHost(msg);
+        console.log("repositories: ", res);
+        return res.git_repo;
+      }
+      async sendToNativeHost(message) {
+        return new Promise((resolve, reject) => {
+          console.log("send message to native host (git): ", message);
+          chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
+            const err = chrome.runtime.lastError;
+            if (err) return reject(err.message || String(err));
+            console.log("success", res);
+            resolve(res);
+          });
+        });
+      }
+      async rebuildMenus(repos) {
+        await new Promise((resolve) => {
+          chrome.contextMenus.removeAll(() => resolve());
+        });
+        const filtered = repos.filter((r) => !r.endsWith(".trace-worktree"));
+        chrome.contextMenus.create({
+          type: "normal",
+          title: "create hash and store with trace-pilot (PDF)",
+          contexts: ["selection", "page"],
+          id: MENU_ID_PDF,
+          enabled: repos.length > 0
+        });
+        chrome.contextMenus.create({
+          type: "normal",
+          title: "create hash and store with trace-pilot (GPT)",
+          contexts: ["selection", "page"],
+          id: MENU_ID_GPT,
+          enabled: filtered.length > 0
+        });
+        for (const repo of filtered) {
+          chrome.contextMenus.create({
+            parentId: MENU_ID_PDF,
+            id: makeChildIdPdf(repo),
+            title: repo,
+            contexts: ["selection", "page"],
+            enabled: true
+          });
+        }
+        for (const repo of filtered) {
+          chrome.contextMenus.create({
+            parentId: MENU_ID_GPT,
+            id: makeChildIdGpt(repo),
+            title: repo,
+            contexts: ["selection", "page"],
+            enabled: true
+          });
+        }
+      }
+      listenClicks() {
+        chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+          if (!tab || typeof tab.id !== "number") {
+            console.error("Menu clicked but tab is missing:", info);
+            return;
+          }
+          const menuId = String(info.menuItemId);
+          if (menuId === MENU_ID_PDF || menuId === MENU_ID_GPT) return;
+          if (menuId.startsWith(CHILD_PREFIX_PDF)) {
+            const repo = decodedRepoId(menuId.slice(CHILD_PREFIX_PDF.length));
+            await this.pdfHandler.handleRepoClick(info, tab, repo);
+            return;
+          }
+          if (menuId.startsWith(CHILD_PREFIX_GPT)) {
+            const repo = decodedRepoId(menuId.slice(CHILD_PREFIX_GPT.length));
+            await this.gptHandler.handleRepoClick(info, tab, repo);
+            return;
+          }
+        });
+      }
+    };
+  }
+});
+
 // background/background.ts
 var require_background = __commonJS({
   "background/background.ts"() {
@@ -458,7 +580,7 @@ var require_background = __commonJS({
     init_gpt_handler();
     init_other_handler();
     init_pdf_handler();
-    init_type();
+    init_menu_manager();
     var genericListener = new generic_listener_default();
     var pdfHandler = new PdfHandler();
     genericListener.addHandler((ev) => pdfHandler.onGenericEvent(ev));
@@ -466,28 +588,13 @@ var require_background = __commonJS({
     genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
     var otherHandler = new OtherHandler();
     genericListener.addHandler((ev) => otherHandler.onGenericEvent(ev));
+    var menuManager = new MenuManager(pdfHandler, gptHandler);
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg && typeof msg === "object" && msg.type === "PING") {
         sendResponse({ ok: true, from: "background" });
         console.log("first message is sccessed!");
         return;
       }
-    });
-    chrome.runtime.onInstalled.addListener(() => {
-      chrome.contextMenus.create({
-        type: "normal",
-        title: "create hash and store with trace-pilot (PDF)",
-        contexts: ["selection", "page"],
-        id: MENU_ID_PDF,
-        enabled: false
-      });
-      chrome.contextMenus.create({
-        type: "normal",
-        title: "create hash and store with trace-pilot (GPT)",
-        contexts: ["selection", "page"],
-        id: MENU_ID_GPT,
-        enabled: false
-      });
     });
   }
 });

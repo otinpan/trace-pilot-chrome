@@ -2,6 +2,7 @@ import GenericListener from "./generic-listener";
 import GPTHandler from "./gpt-module/gpt-handler";
 import { OtherHandler } from "./other-handler";
 import { PdfHandler } from "./pdf-module/pdf-handler";
+import { MenuManager } from "./menu-manager";
 import { MENU_ID_GPT,MENU_ID_OTER,MENU_ID_PDF } from "../type";
 
 const genericListener = new GenericListener();
@@ -15,7 +16,7 @@ genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
 const otherHandler=new OtherHandler();
 genericListener.addHandler((ev)=>otherHandler.onGenericEvent(ev));
 
-
+const menuManager=new MenuManager(pdfHandler,gptHandler);
 
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -27,24 +28,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 
-// If an extension adds more than one context menu item, 
-// Chrome automatically creates a parent menu with the extension's name.
-chrome.runtime.onInstalled.addListener(()=>{
-    chrome.contextMenus.create({
-        type: "normal",
-        title: "create hash and store with trace-pilot (PDF)",
-        contexts: ["selection","page"],
-        id: MENU_ID_PDF,
-        enabled: false
-    });
-    chrome.contextMenus.create({
-        type: "normal",
-        title: "create hash and store with trace-pilot (GPT)",
-        contexts: ["selection","page"],
-        id: MENU_ID_GPT,
-        enabled: false
-    });
-});
+
 
 
 

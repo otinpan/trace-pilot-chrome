@@ -65,9 +65,19 @@ export class GPTHandler extends Handler{
         return null;
     }
 
+    public async handleRepoClick(
+        info: chrome.contextMenus.OnClickData,
+        tab: chrome.tabs.Tab,
+        repoPath: string
+    ):Promise<void>{
+        
+        await this.onMenuClick(info,tab,repoPath);
+    }
+
     protected override async onMenuClick(
         info: chrome.contextMenus.OnClickData,
-        tab: chrome.tabs.Tab
+        tab: chrome.tabs.Tab,
+        repoPath: string
     ):Promise<void>{
         const tabId=await this.getValideTabId(info,tab);
         if(tabId==null||tabId<0){
@@ -148,6 +158,7 @@ export class GPTHandler extends Handler{
             data: {thread_pair:sanitized},
             url: rawUrl,
             plain_text: plainText,
+            repoPath: repoPath
         }
 
 
@@ -163,17 +174,6 @@ export class GPTHandler extends Handler{
         await writeClipboardViaContent(tab.id!, clipboardText);
     }
 
-    private sendToNativeHost(message: any):Promise<any>{
-        return new Promise((resolve,reject)=>{
-            console.log("send message to native host (gpt): ",message);
-            chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res)=>{
-                const err=chrome.runtime.lastError;
-                if(err)return reject(err.message||String(err));
-                console.log("succcess",res);
-                resolve(res);
-            });
-        })
-    }
 }
 
 export async function getSelectionFromAnyFrame(tabId: number): Promise<string> {

@@ -69,12 +69,21 @@ export class PdfHandler extends Handler {
         return null;
     }
 
+    public async handleRepoClick(
+        info: chrome.contextMenus.OnClickData,
+        tab: chrome.tabs.Tab,
+        repoPath: string,
+    ):Promise<void>{
+        
+        await this.onMenuClick(info,tab,repoPath);
+    }
 
     
     // クリックされたとき
     protected override async onMenuClick(
         info: chrome.contextMenus.OnClickData,
-        tab: chrome.tabs.Tab
+        tab: chrome.tabs.Tab,
+        repoPath: string
     ):Promise<void>{
         const tabId=await this.getValideTabId(info,tab);
         if(tabId==null||tabId<0){
@@ -117,6 +126,7 @@ export class PdfHandler extends Handler {
             data: {},
             url,
             plain_text:plainText,
+            repoPath,
         }
         let res=await this.sendToNativeHost(msg);
         const metaHash=res.metaHash;
@@ -126,18 +136,6 @@ export class PdfHandler extends Handler {
         const clipboardText = `${marker}\n${plainText}`;
 
         await writeClipboardViaContent(tabId, clipboardText);
-    }
-
-    private sendToNativeHost(message: any):Promise<any>{
-        return new Promise((resolve,reject)=>{
-            console.log("send message to native host (pdf): ",message);
-            chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res)=>{
-                const err=chrome.runtime.lastError;
-                if(err)return reject(err.message||String(err));
-                console.log("succcess",res);
-                resolve(res);
-            })
-        })
     }
 }
 

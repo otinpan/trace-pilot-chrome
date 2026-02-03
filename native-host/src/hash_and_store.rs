@@ -25,7 +25,7 @@ pub fn calculate_hash_and_store_text(cwd: impl AsRef<Path>, text:&str) -> Result
 
 pub fn calculate_hash_and_store_bytes(cwd: impl AsRef<Path>,data: &[u8])->Result<String>{
     let repo=get_repo_path_or_err(cwd)?;
-    ensure_worktree(&repo);
+    ensure_worktree(&repo)?;
 
     let worktree=repo.join(".trace-worktree");
 

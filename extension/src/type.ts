@@ -9,6 +9,7 @@ export type TracePilotResponse = { selectionText: string } | { error: string };
 export const MENU_ID_PDF="create_hash_and_store_PDF";
 export const MENU_ID_GPT="create_hash_and_store_GPT";
 export const MENU_ID_OTER="create_hash_and_store_OTHER";
+
 export const NATIVE_HOST_NAME="trace_pilot_host_chrome";
 
 export type TracePilotRequest={
@@ -38,17 +39,35 @@ export type GenericEvent={
 export enum RESPONSE_TYPE{
     CHAT_GPT="CHAT_GPT",
     CHROME_PDF="CHROME_PDF",
-    OTHER="OTHER"
+    OTHER="OTHER",
+    GET_GIT="GET_GIT",
 }
+
+export interface GetGitRepoMessage{
+  type: RESPONSE_TYPE.GET_GIT;
+  data: null;
+}
+
+export interface GetGitRepoResponse{
+  ok:true;
+  git_repo: string[];
+}
+
+export interface MetaHashMessage{
+    meta_hash:string;
+}
+
 
 export type MessageToNativeHost =
   | ChromePdfMessage
   | ChatGptMessage
-  | OtherMessage;
+  | OtherMessage
+
 
 interface BaseMessage {
   url: string;
   plain_text: string;
+  repoPath: string;
 }
 
 export interface ChromePdfMessage extends BaseMessage {
@@ -65,7 +84,6 @@ export interface OtherMessage extends BaseMessage {
   type: RESPONSE_TYPE.OTHER;
   data: null;
 }
-
 
 
 export interface PDFData{

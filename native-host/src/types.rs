@@ -101,6 +101,7 @@ pub enum RequestFromChrome {
         data: PDFData,
         url: String,
         plain_text: String,
+        repoPath: String,
     },
 
     #[serde(rename = "CHAT_GPT")]
@@ -108,6 +109,7 @@ pub enum RequestFromChrome {
         data: GPTData,
         url: String,
         plain_text: String,
+        repoPath: String,
     },
 
     #[serde(rename = "OTHER")]
@@ -115,7 +117,13 @@ pub enum RequestFromChrome {
         data: Option<serde_json::Value>, // or omit data entirely, どっちでも
         url: String,
         plain_text: String,
+        repoPath: String,
     },
+
+    #[serde(rename="GET_GIT")]
+    GetGit{
+        data: Option<serde_json::Value>,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,7 +133,6 @@ pub struct PDFData {}
 pub struct GPTData {
     pub thread_pair: ThreadPair,
 }
-
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,5 +156,11 @@ pub struct ThreadPair {
     pub codeBlocks: Vec<CodeBlock>,
 }
 
+
+#[derive(Debug,Clone,Serialize,Deserialize)]
+pub struct GetGitRepoResponse{
+    pub ok:bool,
+    pub git_repo:Vec<String>,
+}
 
 

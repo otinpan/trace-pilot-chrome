@@ -13,6 +13,7 @@ chrono="0.4"
 reqwest = { version = "0.12", features = ["rustls-tls"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 url = "2"
+walkdir = "2"
 
 [workspace]
 members =[
