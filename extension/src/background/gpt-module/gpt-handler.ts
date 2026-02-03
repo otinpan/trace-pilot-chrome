@@ -25,7 +25,6 @@ export class GPTHandler extends Handler{
         super(MENU_ID_GPT);
     }
 
-
     public onGenericEvent(ev: GenericEvent){
         if(ev.command===COMMANDS.GPT_OPEN&&ev.url&&ev.title){
             console.log("gpt");

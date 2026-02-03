@@ -26,6 +26,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 });
 
+
+// If an extension adds more than one context menu item, 
+// Chrome automatically creates a parent menu with the extension's name.
 chrome.runtime.onInstalled.addListener(()=>{
     chrome.contextMenus.create({
         type: "normal",
@@ -42,5 +45,7 @@ chrome.runtime.onInstalled.addListener(()=>{
         enabled: false
     });
 });
+
+
 
 
