@@ -5,6 +5,8 @@ use schemars::JsonSchema;
 pub enum WebInfoSource {
     #[serde(rename = "CHAT_GPT")]
     ChatGpt,
+    #[serde(rename = "CODING_AGENT")]
+    CodingAgent,
     #[serde(rename="CHROME_PDF")]
     ChromePDF,
     #[serde(rename = "VSCODE")]
@@ -30,6 +32,7 @@ pub struct Metadata {
 #[serde(untagged)]
 pub enum AdditionalHash{
     VSCodeHash(VSCodeHash),
+    CodingAgentHash(CodingAgentHash),
     ChromePDFHash(ChromePDFHash),
     GPTHash(GPTHash),
 }
@@ -37,6 +40,15 @@ pub enum AdditionalHash{
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct VSCodeHash{
     pub fullTextHash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CodingAgentHash{
+    pub promptHash: String,
+    pub generatedHash: String,
+
+    #[serde(default)]
+    pub codeBlockHashes: Vec<CodeBlockHash>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
@@ -71,12 +83,19 @@ pub struct CodeBlockHash {
 #[serde(untagged)]
 pub enum AdditionalMetadata {
     GPTMetadata(GPTMetadata),
+    CodingAgentMetadata(CodingAgentMetadata),
     VSCodeMetadata(VSCodeMetadata),
     ChromePDFMetadata(ChromePDFMetadata),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct VSCodeMetadata {
+    pub isText: bool,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
+pub struct CodingAgentMetadata{
     pub isText: bool,
 }
 
