@@ -9,6 +9,8 @@ pub enum WebInfoSource {
     CodingAgent,
     #[serde(rename="CHROME_PDF")]
     ChromePDF,
+    #[serde(rename="CHROME_STATIC")]
+    ChromeStatic,
     #[serde(rename = "VSCODE")]
     Vscode,
     #[serde(rename = "OTHER")]
@@ -34,6 +36,7 @@ pub enum AdditionalHash{
     VSCodeHash(VSCodeHash),
     CodingAgentHash(CodingAgentHash),
     ChromePDFHash(ChromePDFHash),
+    ChromeStaticHash(ChromeStaticHash),
     GPTHash(GPTHash),
 }
 
@@ -54,6 +57,11 @@ pub struct CodingAgentHash{
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct ChromePDFHash{
     pub fullTextHash:String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
+pub struct ChromeStaticHash{
+    pub mhtmlHash:String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
@@ -86,6 +94,7 @@ pub enum AdditionalMetadata {
     CodingAgentMetadata(CodingAgentMetadata),
     VSCodeMetadata(VSCodeMetadata),
     ChromePDFMetadata(ChromePDFMetadata),
+    ChromeStaticMetadata(ChromeStaticMetadata),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
@@ -102,6 +111,13 @@ pub struct CodingAgentMetadata{
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct ChromePDFMetadata{
     pub isText:bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
+pub struct ChromeStaticMetadata{
+    pub isText: bool,
+    pub encoding: String,
+    pub title: Option<String>,
 }
 
 
@@ -195,5 +211,4 @@ pub struct GetGitRepoResponse{
     pub ok:bool,
     pub git_repo:Vec<String>,
 }
-
 

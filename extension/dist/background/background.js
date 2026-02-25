@@ -608,6 +608,32 @@ var init_menu_manager = __esm({
 });
 
 // background/static-module/static-handler.ts
+function saveAsMhtml(tabId) {
+  return new Promise((resolve, reject) => {
+    chrome.pageCapture.saveAsMHTML({ tabId }, (data) => {
+      const err = chrome.runtime.lastError;
+      if (err) {
+        reject(new Error(err.message || String(err)));
+        return;
+      }
+      if (!data) {
+        reject(new Error("saveAsMHTML returned empty data"));
+        return;
+      }
+      resolve(data);
+    });
+  });
+}
+function arrayBufferToBase64(ab) {
+  let binary = "";
+  const bytes = new Uint8Array(ab);
+  const chunkSize = 32768;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
 var StaticHandler;
 var init_static_handler = __esm({
   "background/static-module/static-handler.ts"() {
@@ -660,9 +686,22 @@ var init_static_handler = __esm({
           return;
         }
         console.log("plain text: ", plainText);
+        let mhtml_base64;
+        try {
+          const mhtmlBlob = await saveAsMhtml(tabId);
+          const ab = await mhtmlBlob.arrayBuffer();
+          mhtml_base64 = arrayBufferToBase64(ab);
+        } catch (err) {
+          console.error("failed to capture mhtml", err);
+          return;
+        }
         const msg = {
           type: "CHROME_STATIC" /* CHROME_STATIC */,
-          data: {},
+          data: {
+            mhtml_base64,
+            encoding: "base64",
+            title: tab.title
+          },
           url: rawUrl,
           plain_text: plainText,
           repoPath

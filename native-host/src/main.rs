@@ -1,5 +1,6 @@
 use std::io::{self, Read, Write};
 use anyhow::{anyhow, bail, Context, Result};
+use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use serde::{Deserialize,Serialize};
 use std::path::{Path, PathBuf};
@@ -64,6 +65,13 @@ async fn async_main() -> Result<()> {
             let meta_hash=hash_and_store_gpt(url,plain_text,data,repoPath).await?;
             let resp = Response { metaHash: meta_hash };
             let resp_json = serde_json::to_vec(&resp).context("failed to serialize response")?;
+            eprintln!("resp {}",resp.metaHash);
+            write_output_bytes(&resp_json).context("write_output failed")?;
+        }
+        types::RequestFromChrome::ChromeStatic {url,plain_text,data,repoPath}=>{
+            let meta_hash=hash_and_store_static(url,plain_text,data,repoPath).await?;
+            let resp=Response{metaHash: meta_hash};
+            let resp_json=serde_json::to_vec(&resp).context("failed to serialize response")?;
             eprintln!("resp {}",resp.metaHash);
             write_output_bytes(&resp_json).context("write_output failed")?;
         }
@@ -240,6 +248,50 @@ async fn hash_and_store_gpt(url: String,plain_text:String,data:types::GPTData,re
     let meta_hash=hash_and_store::calculate_hash_and_store_text(cwd, meta_json_str)?;
 
 
+    Ok(meta_hash)
+}
+
+async fn hash_and_store_static(url: String, plain_text: String,data: types::StaticData, repoPath: String)->Result<String>{
+    let cwd = repoPath.as_str();
+
+    let original_hash = hash_and_store::calculate_hash_and_store_text(cwd, &plain_text)?;
+    eprintln!("original_hash: {}", original_hash);
+
+    // base64からhtmlに戻す
+    let mhtml_bytes = general_purpose::STANDARD
+        .decode(&data.mhtml_base64)
+        .context("failed to decode data.mhtml_base64")?;
+    let mhtml_hash = hash_and_store::calculate_hash_and_store_bytes(cwd, &mhtml_bytes)?;
+    eprintln!("mhtml_hash: {}", mhtml_hash);
+
+    let meta = types::Metadata {
+        originalHash: original_hash,
+        additionalHash: Some(
+            types::AdditionalHash::ChromeStaticHash(
+                types::ChromeStaticHash {
+                    mhtmlHash: mhtml_hash,
+                }
+            )
+        ),
+        url,
+        r#type: types::WebInfoSource::ChromeStatic,
+        timeCopied: Utc::now().to_rfc3339(),
+        timeCopiedNumber: Utc::now().timestamp_millis(),
+        additionalMetaData: Some(
+            types::AdditionalMetadata::ChromeStaticMetadata(
+                types::ChromeStaticMetadata {
+                    isText: false,
+                    encoding: data.encoding,
+                    title: data.title,
+                }
+            )
+        ),
+    };
+
+    eprintln!("{:?}", meta);
+
+    let meta_json = serde_json::to_string(&meta)?;
+    let meta_hash = hash_and_store::calculate_hash_and_store_text(cwd, &meta_json)?;
     Ok(meta_hash)
 }
 
