@@ -163,7 +163,9 @@ pub struct GPTData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StaticData{
-
+    pub mhtml_base64: String,
+    pub encoding: String,
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

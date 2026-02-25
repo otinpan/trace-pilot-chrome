@@ -42,7 +42,11 @@ export const ChromeStaticMessageSchema=z.object({
     type: z.literal("CHROME_STATIC"),
     url: z.string(),
     plain_text: z.string(),
-    data: z.object({}),
+    data: z.object({
+        mhtml_base64: z.string(),
+        encoding: z.literal("base64"),
+        title: z.string().optional(),
+    }),
 });
 
 

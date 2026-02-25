@@ -104,5 +104,7 @@ export interface GPTData{
 }
 
 export interface StaticData{
-
+  mhtml_base64: string,
+  encoding: "base64",
+  title?: string,
 }

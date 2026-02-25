@@ -12,6 +12,34 @@ import { writeClipboardViaContent } from "../pdf-module/pdf-handler";
 
 type ClickInfoExt=chrome.contextMenus.OnClickData & {tabId?: number};
 
+function saveAsMhtml(tabId: number): Promise<Blob>{
+  return new Promise((resolve,reject)=>{
+    chrome.pageCapture.saveAsMHTML({tabId}, (data)=>{
+      const err=chrome.runtime.lastError;
+      if(err){
+        reject(new Error(err.message||String(err)));
+        return;
+      }
+      if(!data){
+        reject(new Error("saveAsMHTML returned empty data"));
+        return;
+      }
+      resolve(data);
+    });
+  });
+}
+
+function arrayBufferToBase64(ab: ArrayBuffer):string{
+  let binary="";
+  const bytes=new Uint8Array(ab);
+  const chunkSize=0x8000;
+  for(let i=0;i<bytes.length;i+=chunkSize){
+    const chunk=bytes.subarray(i,i+chunkSize);
+    binary+=String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
 export class StaticHandler extends Handler{
   constructor(){
     super(MENU_ID_STATIC);
@@ -68,8 +96,7 @@ export class StaticHandler extends Handler{
       return;
     }
 
-    const rawUrl=
-      (info as any).frameUrl ||
+    const rawUrl= (info as any).frameUrl ||
       info.pageUrl ||
       tab.url ||
       (tab as any).pendingUrl ||
@@ -84,9 +111,26 @@ export class StaticHandler extends Handler{
     }
     console.log("plain text: ",plainText);
 
+    // mhtmlの取得
+    let mhtml_base64: string;
+    try{
+      const mhtmlBlob=await saveAsMhtml(tabId);
+      const ab=await mhtmlBlob.arrayBuffer();
+      // 文字列を英数字だけの文字列に変換する
+      // サイズは1.33倍になるが置換文字などを安全に扱える
+      mhtml_base64=arrayBufferToBase64(ab);
+    }catch(err){
+      console.error("failed to capture mhtml",err);
+      return;
+    }
+
     const msg:MessageToNativeHost={
       type:RESPONSE_TYPE.CHROME_STATIC,
-      data: {},
+      data: {
+        mhtml_base64,
+        encoding: "base64",
+        title: tab.title,
+      },
       url: rawUrl,
       plain_text: plainText,
       repoPath,
