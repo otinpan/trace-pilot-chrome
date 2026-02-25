@@ -38,6 +38,13 @@ export const ChatGptMessageSchema=z.object({
     data: GPTDataSchema,
 });
 
+export const ChromeStaticMessageSchema=z.object({
+    type: z.literal("CHROME_STATIC"),
+    url: z.string(),
+    plain_text: z.string(),
+    data: z.object({}),
+});
+
 
 export const OtherMessageSchema=z.object({
     type: z.literal("OTHER"),
@@ -48,6 +55,7 @@ export const OtherMessageSchema=z.object({
 
 export const MessageToNativeHostSchema=z.union([
     ChromePdfMessageSchema,
+    ChromeStaticMessageSchema,
     ChatGptMessageSchema,
     OtherMessageSchema,
 ]);

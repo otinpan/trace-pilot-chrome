@@ -7,7 +7,7 @@ var __commonJS = (cb, mod) => function __require() {
 };
 
 // type.ts
-var TRACE_PILOT_MARKER, MENU_ID_PDF, MENU_ID_GPT, MENU_ID_OTER, NATIVE_HOST_NAME;
+var TRACE_PILOT_MARKER, MENU_ID_PDF, MENU_ID_GPT, MENU_ID_OTER, MENU_ID_STATIC, NATIVE_HOST_NAME;
 var init_type = __esm({
   "type.ts"() {
     "use strict";
@@ -15,6 +15,7 @@ var init_type = __esm({
     MENU_ID_PDF = "create_hash_and_store_PDF";
     MENU_ID_GPT = "create_hash_and_store_GPT";
     MENU_ID_OTER = "create_hash_and_store_OTHER";
+    MENU_ID_STATIC = "create_hash_and_store_STATIC";
     NATIVE_HOST_NAME = "trace_pilot_host_chrome";
   }
 });
@@ -68,7 +69,7 @@ var init_generic_listener = __esm({
           const url = tab.url;
           if (!url || changeInfo.status !== "complete") return;
           const isPdf = isLikelyPdfUrl(url);
-          let command = "otherOpen" /* OTHER_OPEN */;
+          let command = "staticOpen" /* STATIC_OPEN */;
           if (isPdf) {
             command = "pdfOpen" /* PDF_OPEN */;
           } else if (url.includes("chatgpt.com")) {
@@ -215,7 +216,7 @@ var init_pdf_handler = __esm({
           this.setEnabled(false);
         }
       }
-      async getValideTabId(info, tab) {
+      async getValidTabId(info, tab) {
         const i = info;
         const cands = [
           i.tabId,
@@ -233,7 +234,7 @@ var init_pdf_handler = __esm({
       }
       // クリックされたとき
       async onMenuClick(info, tab, repoPath) {
-        const tabId = await this.getValideTabId(info, tab);
+        const tabId = await this.getValidTabId(info, tab);
         if (tabId == null || tabId < 0) {
           console.error("no valide tabId", tabId);
           return;
@@ -322,7 +323,7 @@ var init_gpt_handler = __esm({
           this.setEnabled(false);
         }
       }
-      async getValideTabId(info, tab) {
+      async getValidTabId(info, tab) {
         const i = info;
         const cands = [
           i.tabId,
@@ -338,7 +339,7 @@ var init_gpt_handler = __esm({
         await this.onMenuClick(info, tab, repoPath);
       }
       async onMenuClick(info, tab, repoPath) {
-        const tabId = await this.getValideTabId(info, tab);
+        const tabId = await this.getValidTabId(info, tab);
         if (tabId == null || tabId < 0) {
           console.error("no valide tabId", tabId);
           return;
@@ -452,17 +453,22 @@ function makeChildIdPdf(repoPath) {
 function makeChildIdGpt(repoPath) {
   return CHILD_PREFIX_GPT + encodedRepoId(repoPath);
 }
-var CHILD_PREFIX_PDF, CHILD_PREFIX_GPT, MenuManager;
+function makeChildIdStatic(repoPath) {
+  return CHILD_PREFIX_STATIC + encodedRepoId(repoPath);
+}
+var CHILD_PREFIX_PDF, CHILD_PREFIX_GPT, CHILD_PREFIX_STATIC, MenuManager;
 var init_menu_manager = __esm({
   "background/menu-manager.ts"() {
     "use strict";
     init_type();
     CHILD_PREFIX_PDF = "tp:repo:pdf:";
     CHILD_PREFIX_GPT = "tp:repo:gpt:";
+    CHILD_PREFIX_STATIC = "tp:repo:static:";
     MenuManager = class {
-      constructor(pdfHandler, gptHandler) {
+      constructor(pdfHandler, gptHandler, staticHandler) {
         this.pdfHandler = pdfHandler;
         this.gptHandler = gptHandler;
+        this.staticHandler = staticHandler;
         this.cachedRepos = [];
         this.init();
         this.listenClicks();
@@ -482,6 +488,13 @@ var init_menu_manager = __esm({
             title: "create hash and store with trace-pilot (GPT)",
             contexts: ["selection", "page"],
             id: MENU_ID_GPT,
+            enabled: false
+          });
+          chrome.contextMenus.create({
+            type: "normal",
+            title: "create hash and store with trace-pilot (Static)",
+            contexts: ["selection", "page"],
+            id: MENU_ID_STATIC,
             enabled: false
           });
         });
@@ -530,6 +543,13 @@ var init_menu_manager = __esm({
           id: MENU_ID_GPT,
           enabled: filtered.length > 0
         });
+        chrome.contextMenus.create({
+          type: "normal",
+          title: "create hash and store with trace-pilot (Static)",
+          contexts: ["selection", "page"],
+          id: MENU_ID_STATIC,
+          enabled: filtered.length > 0
+        });
         for (const repo of filtered) {
           chrome.contextMenus.create({
             parentId: MENU_ID_PDF,
@@ -548,6 +568,15 @@ var init_menu_manager = __esm({
             enabled: true
           });
         }
+        for (const repo of filtered) {
+          chrome.contextMenus.create({
+            parentId: MENU_ID_STATIC,
+            id: makeChildIdStatic(repo),
+            title: repo,
+            contexts: ["selection", "page"],
+            enabled: true
+          });
+        }
       }
       listenClicks() {
         chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -556,7 +585,7 @@ var init_menu_manager = __esm({
             return;
           }
           const menuId = String(info.menuItemId);
-          if (menuId === MENU_ID_PDF || menuId === MENU_ID_GPT) return;
+          if (menuId === MENU_ID_PDF || menuId === MENU_ID_GPT || menuId === MENU_ID_STATIC) return;
           if (menuId.startsWith(CHILD_PREFIX_PDF)) {
             const repo = decodedRepoId(menuId.slice(CHILD_PREFIX_PDF.length));
             await this.pdfHandler.handleRepoClick(info, tab, repo);
@@ -567,7 +596,83 @@ var init_menu_manager = __esm({
             await this.gptHandler.handleRepoClick(info, tab, repo);
             return;
           }
+          if (menuId.startsWith(CHILD_PREFIX_STATIC)) {
+            const repo = decodedRepoId(menuId.slice(CHILD_PREFIX_STATIC.length));
+            await this.staticHandler.handleRepoClick(info, tab, repo);
+            return;
+          }
         });
+      }
+    };
+  }
+});
+
+// background/static-module/static-handler.ts
+var StaticHandler;
+var init_static_handler = __esm({
+  "background/static-module/static-handler.ts"() {
+    "use strict";
+    init_type();
+    init_handler();
+    init_pdf_handler();
+    StaticHandler = class extends Handler {
+      constructor() {
+        super(MENU_ID_STATIC);
+      }
+      onGenericEvent(ev) {
+        if (ev.command === "staticOpen" /* STATIC_OPEN */ && ev.url) {
+          console.log("static page");
+          this.setEnabled(true);
+        } else {
+          this.setEnabled(false);
+        }
+      }
+      async getValidTabId(info, tab) {
+        const i = info;
+        const cands = [
+          i.tabId,
+          tab.id
+        ].filter((x) => typeof x === "number");
+        const ok = cands.find((id) => id >= 0);
+        if (ok != null) return ok;
+        const [active] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true
+        });
+        if (active?.id != null && active.id >= 0) return active.id;
+        return null;
+      }
+      async handleRepoClick(info, tab, repoPath) {
+        await this.onMenuClick(info, tab, repoPath);
+      }
+      async onMenuClick(info, tab, repoPath) {
+        const tabId = await this.getValidTabId(info, tab);
+        if (tabId == null || tabId < 0) {
+          console.error("no valid tabId", tabId);
+          return;
+        }
+        const rawUrl = info.frameUrl || info.pageUrl || tab.url || tab.pendingUrl || "";
+        if (!rawUrl) {
+          return;
+        }
+        const plainText = info.selectionText;
+        if (plainText === void 0) {
+          return;
+        }
+        console.log("plain text: ", plainText);
+        const msg = {
+          type: "CHROME_STATIC" /* CHROME_STATIC */,
+          data: {},
+          url: rawUrl,
+          plain_text: plainText,
+          repoPath
+        };
+        let res = await this.sendToNativeHost(msg);
+        const metaHash = res.metaHash;
+        const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
+        const clipboardText = `${marker}
+${plainText}`;
+        await writeClipboardViaContent(tabId, clipboardText);
       }
     };
   }
@@ -581,6 +686,7 @@ var require_background = __commonJS({
     init_other_handler();
     init_pdf_handler();
     init_menu_manager();
+    init_static_handler();
     var genericListener = new generic_listener_default();
     var pdfHandler = new PdfHandler();
     genericListener.addHandler((ev) => pdfHandler.onGenericEvent(ev));
@@ -588,7 +694,9 @@ var require_background = __commonJS({
     genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
     var otherHandler = new OtherHandler();
     genericListener.addHandler((ev) => otherHandler.onGenericEvent(ev));
-    var menuManager = new MenuManager(pdfHandler, gptHandler);
+    var staticHandler = new StaticHandler();
+    genericListener.addHandler((ev) => staticHandler.onGenericEvent(ev));
+    var menuManager = new MenuManager(pdfHandler, gptHandler, staticHandler);
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg && typeof msg === "object" && msg.type === "PING") {
         sendResponse({ ok: true, from: "background" });

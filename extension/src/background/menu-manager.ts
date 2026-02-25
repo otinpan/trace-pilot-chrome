@@ -1,6 +1,7 @@
 import { 
     MENU_ID_GPT,
     MENU_ID_PDF,
+    MENU_ID_STATIC,
     NATIVE_HOST_NAME,
     RESPONSE_TYPE,
     GetGitRepoMessage,
@@ -12,6 +13,7 @@ import { PdfHandler } from "./pdf-module/pdf-handler";
 
 const CHILD_PREFIX_PDF="tp:repo:pdf:";
 const CHILD_PREFIX_GPT="tp:repo:gpt:";
+const CHILD_PREFIX_STATIC="tp:repo:static:";
 
 export class MenuManager{
     constructor(
@@ -20,6 +22,10 @@ export class MenuManager{
                 :(info:chrome.contextMenus.OnClickData,
                     tab:chrome.tabs.Tab,repoPath:string)=>Promise<void>},
         private readonly gptHandler
+             :{handleRepoClick
+                :(info:chrome.contextMenus.OnClickData,
+                    tab:chrome.tabs.Tab,repoPath:string)=>Promise<void>},
+        private readonly staticHandler
              :{handleRepoClick
                 :(info:chrome.contextMenus.OnClickData,
                     tab:chrome.tabs.Tab,repoPath:string)=>Promise<void>},
@@ -48,6 +54,13 @@ export class MenuManager{
                 title: "create hash and store with trace-pilot (GPT)",
                 contexts: ["selection","page"],
                 id: MENU_ID_GPT,
+                enabled: false
+            });
+            chrome.contextMenus.create({
+                type: "normal",
+                title: "create hash and store with trace-pilot (Static)",
+                contexts: ["selection","page"],
+                id: MENU_ID_STATIC,
                 enabled: false
             });
         });
@@ -107,6 +120,14 @@ export class MenuManager{
             enabled: filtered.length>0,
         });
 
+        chrome.contextMenus.create({
+            type: "normal",
+            title: "create hash and store with trace-pilot (Static)",
+            contexts: ["selection","page"],
+            id: MENU_ID_STATIC,
+            enabled: filtered.length>0,
+        });
+
         // pdf
         for (const repo of filtered){
             chrome.contextMenus.create({
@@ -128,6 +149,17 @@ export class MenuManager{
                 enabled: true,
             });
         }
+
+        // static
+        for (const repo of filtered){
+            chrome.contextMenus.create({
+                parentId: MENU_ID_STATIC,
+                id: makeChildIdStatic(repo),
+                title:repo,
+                contexts: ["selection","page"],
+                enabled: true,
+            });
+        }
     }
 
     private listenClicks(){
@@ -141,7 +173,7 @@ export class MenuManager{
             const menuId=String(info.menuItemId);
 
             // 親は何もしない
-            if(menuId===MENU_ID_PDF||menuId===MENU_ID_GPT)return;
+            if(menuId===MENU_ID_PDF||menuId===MENU_ID_GPT||menuId===MENU_ID_STATIC)return;
 
             // 子 pdf
             if(menuId.startsWith(CHILD_PREFIX_PDF)){
@@ -154,6 +186,13 @@ export class MenuManager{
             if(menuId.startsWith(CHILD_PREFIX_GPT)){
                 const repo=decodedRepoId(menuId.slice(CHILD_PREFIX_GPT.length));
                 await this.gptHandler.handleRepoClick(info,tab,repo);
+                return;
+            }
+
+            // 子 static
+            if(menuId.startsWith(CHILD_PREFIX_STATIC)){
+                const repo=decodedRepoId(menuId.slice(CHILD_PREFIX_STATIC.length));
+                await this.staticHandler.handleRepoClick(info,tab,repo);
                 return;
             }
 
@@ -176,4 +215,8 @@ function makeChildIdPdf(repoPath:string){
 
 function makeChildIdGpt(repoPath:string){
     return CHILD_PREFIX_GPT+encodedRepoId(repoPath);
+}
+
+function makeChildIdStatic(repoPath:string){
+    return CHILD_PREFIX_STATIC+encodedRepoId(repoPath);
 }

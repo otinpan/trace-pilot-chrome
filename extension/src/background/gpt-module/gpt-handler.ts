@@ -46,7 +46,7 @@ export class GPTHandler extends Handler{
         }
     }
 
-    private async getValideTabId(
+    private async getValidTabId(
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab
     ):Promise<number|null>{
@@ -79,7 +79,7 @@ export class GPTHandler extends Handler{
         tab: chrome.tabs.Tab,
         repoPath: string
     ):Promise<void>{
-        const tabId=await this.getValideTabId(info,tab);
+        const tabId=await this.getValidTabId(info,tab);
         if(tabId==null||tabId<0){
             console.error("no valide tabId",tabId);
             return;
@@ -202,7 +202,6 @@ export async function getSelectionFromAnyFrame(tabId: number): Promise<string> {
 }
 
 export default GPTHandler;
-
 
 
 

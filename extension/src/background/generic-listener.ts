@@ -39,7 +39,7 @@ export class GenericListener{
             
             const isPdf=isLikelyPdfUrl(url);
           
-            let command: COMMANDS = COMMANDS.OTHER_OPEN;
+            let command: COMMANDS = COMMANDS.STATIC_OPEN;
           
             if (isPdf) {
                 command = COMMANDS.PDF_OPEN;

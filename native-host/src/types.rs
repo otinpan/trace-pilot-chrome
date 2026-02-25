@@ -131,6 +131,14 @@ pub enum RequestFromChrome {
         repoPath: String,
     },
 
+    #[serde(rename = "CHROME_STATIC")]
+    ChromeStatic{
+        data: StaticData,
+        url: String,
+        plain_text: String,
+        repoPath: String,
+    },
+
     #[serde(rename = "OTHER")]
     Other {
         data: Option<serde_json::Value>, // or omit data entirely, どっちでも
@@ -153,6 +161,10 @@ pub struct GPTData {
     pub thread_pair: ThreadPair,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaticData{
+
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodeBlock {

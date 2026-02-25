@@ -3,6 +3,7 @@ import GPTHandler from "./gpt-module/gpt-handler";
 import { OtherHandler } from "./other-handler";
 import { PdfHandler } from "./pdf-module/pdf-handler";
 import { MenuManager } from "./menu-manager";
+import { StaticHandler } from "./static-module/static-handler";
 import { MENU_ID_GPT,MENU_ID_OTER,MENU_ID_PDF } from "../type";
 
 const genericListener = new GenericListener();
@@ -16,7 +17,10 @@ genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
 const otherHandler=new OtherHandler();
 genericListener.addHandler((ev)=>otherHandler.onGenericEvent(ev));
 
-const menuManager=new MenuManager(pdfHandler,gptHandler);
+const staticHandler=new StaticHandler();
+genericListener.addHandler((ev)=>staticHandler.onGenericEvent(ev));
+
+const menuManager=new MenuManager(pdfHandler,gptHandler,staticHandler);
 
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
