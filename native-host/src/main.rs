@@ -12,6 +12,9 @@ mod hash_and_store;
 mod get_bytes_from_url;
 mod types;
 
+const MAX_INPUT_BYTES: usize=64*1024*1024;
+const MAX_OUTPUT_BYTES: usize=1*1024*1024;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Response {
     metaHash: String,
@@ -32,7 +35,6 @@ async fn async_main() -> Result<()> {
     let input = read_input().context("read_input failed")?;
 
     eprintln!("raw input bytes = {}", input.len());
-    eprintln!("{}", String::from_utf8_lossy(&input));
     eprintln!("first char = {:?}", String::from_utf8_lossy(&input).chars().next());
 
 
@@ -95,7 +97,7 @@ pub fn read_input() -> io::Result<Vec<u8>> {
     instream.read_exact(&mut length)?;
     let size = u32::from_le_bytes(length) as usize;
 
-    if size > 1024 * 1024 {
+    if size > MAX_INPUT_BYTES{
         return Err(io::Error::new(io::ErrorKind::InvalidData, "Message too large"));
     }
 
@@ -107,7 +109,7 @@ pub fn read_input() -> io::Result<Vec<u8>> {
 pub fn write_output_bytes(payload: &[u8]) -> io::Result<()> {
     let mut outstream = io::stdout();
 
-    if payload.len() > 1024 * 1024 {
+    if payload.len() > MAX_OUTPUT_BYTES {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "Message too large"));
     }
 

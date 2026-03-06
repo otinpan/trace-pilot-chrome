@@ -473,6 +473,59 @@
         })();
         return true;
       });
+      function viewClipboardData(event) {
+        const clipboardData = event.clipboardData;
+        if (!clipboardData) {
+          console.log("clipboardData is empty");
+          return;
+        }
+        console.log("clipboard data");
+        console.log("types:", Array.from(clipboardData.types));
+        for (let i = 0; i < clipboardData.types.length; i++) {
+          const t = clipboardData.types[i];
+          const v = clipboardData.getData(t);
+          if (v) {
+            console.log(`type = ${t}, getData = ${v}`);
+          }
+        }
+        if (clipboardData.items) {
+          for (let i = 0; i < clipboardData.items.length; i++) {
+            const item = clipboardData.items[i];
+            const kind = item.kind;
+            const type = item.type;
+            if (item.kind === "string") {
+              item.getAsString((s) => {
+                console.log(`kind = ${kind}, type = ${type}, string = ${s}`);
+              });
+            } else if (item.kind === "file") {
+              const f = item.getAsFile();
+              if (!f) continue;
+              const url = window.URL.createObjectURL(f);
+              console.log(`kind = ${kind}, type = ${type}, url = ${url}`);
+              window.URL.revokeObjectURL(url);
+            }
+          }
+        }
+      }
+      var isCtrlCPressed = false;
+      window.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+          isCtrlCPressed = true;
+        }
+      });
+      window.addEventListener("keyup", (event) => {
+        if (event.key.toLowerCase() === "c" || event.key === "Control" || event.key === "Meta") {
+          isCtrlCPressed = false;
+        }
+      });
+      window.addEventListener("blur", () => {
+        isCtrlCPressed = false;
+      });
+      window.addEventListener("copy", (event) => {
+        if (!isCtrlCPressed) return;
+        viewClipboardData(event);
+        isCtrlCPressed = false;
+      });
     }
   });
   require_content();

@@ -118,3 +118,92 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 
+
+/*
+@param {Object.<string,{text:string}|{blob:Blob}>} write_data 
+ * クリップボードへ書き込むデータ\
+ * keyに「text/plain」「image/png」等のデータタイプ(MIMEタイプ)を指定、\
+ * valueに書き込むデータとして、"text"か"blob"を指定する
+ * @returns clipboardの「write」結果(Promise<void>)
+ */
+async function writeClipbpard(write_data:Object){
+    // まずは[key,blob]のturple配列に変換
+    const clipboard_entries = Object.entries(write_data).map(([key,value])=>{
+        if(value["text"]){    // "text"が渡ってきたら自前でBlobを作る
+            const blob=new Blob([value["text"]],{type:key})
+            return [key,blob]
+        }
+        else if(value["blob"]){ // "blob"が来たらBlobが入ってると見なしてそのまま
+            return [key,value["blob"]]
+        }
+        else{     // それ以外が来たら一応空文字をセットしておく
+            return [key,""]
+        }
+    })
+
+    // 上のturple配列をオブジェクトにしつつ、ClipboardItemを作る
+    const clipboard_item = [new ClipboardItem(Object.fromEntries(clipboard_entries))]
+
+    // clipboardにwriteする
+    return navigator.clipboard.write(clipboard_item)
+}
+
+
+
+// Ctrl + cでclipboardのデータを表示する
+function viewClipboardData(event: ClipboardEvent){
+  const clipboardData=event.clipboardData;
+  if(!clipboardData){
+    console.log("clipboardData is empty");
+    return;
+  }
+
+  console.log("clipboard data");
+  console.log("types:", Array.from(clipboardData.types));
+
+
+  if(clipboardData.items){
+    for(let i=0;i<clipboardData.items.length;i++){
+      const item=clipboardData.items[i];
+      const kind=item.kind;
+      const type=item.type;
+      if(item.kind==="string"){
+        item.getAsString((s: string)=>{
+          console.log(`kind = ${kind}, type = ${type}, string = ${s}`);
+        })
+      }else if(item.kind==="file"){
+        const f=item.getAsFile();
+        if(!f) continue;
+
+        const url=window.URL.createObjectURL(f);
+        console.log(`kind = ${kind}, type = ${type}, url = ${url}`);
+
+        window.URL.revokeObjectURL(url);
+      }
+    }
+  }
+}
+
+let isCtrlCPressed=false;
+
+window.addEventListener("keydown",(event: KeyboardEvent)=>{
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="c"){
+    isCtrlCPressed=true;
+  }
+});
+
+window.addEventListener("keyup",(event: KeyboardEvent)=>{
+  if(event.key.toLowerCase()==="c"||event.key==="Control"||event.key==="Meta"){
+    isCtrlCPressed=false;
+  }
+});
+
+window.addEventListener("blur",()=>{
+  isCtrlCPressed=false;
+});
+
+window.addEventListener("copy",(event: ClipboardEvent)=>{
+  if(!isCtrlCPressed) return;
+  viewClipboardData(event);
+  isCtrlCPressed=false;
+});
