@@ -711,6 +711,7 @@ var init_static_handler = __esm({
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}
 ${plainText}`;
+        console.log("clipboard text: ", clipboardText);
         await writeClipboardViaContent(tabId, clipboardText);
       }
     };

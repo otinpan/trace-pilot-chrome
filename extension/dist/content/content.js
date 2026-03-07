@@ -481,13 +481,6 @@
         }
         console.log("clipboard data");
         console.log("types:", Array.from(clipboardData.types));
-        for (let i = 0; i < clipboardData.types.length; i++) {
-          const t = clipboardData.types[i];
-          const v = clipboardData.getData(t);
-          if (v) {
-            console.log(`type = ${t}, getData = ${v}`);
-          }
-        }
         if (clipboardData.items) {
           for (let i = 0; i < clipboardData.items.length; i++) {
             const item = clipboardData.items[i];

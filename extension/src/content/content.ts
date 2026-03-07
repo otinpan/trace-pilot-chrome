@@ -1,8 +1,8 @@
 import { TracePilotResponse } from "../type";
 import { GPTListener } from "./gpt-module/gpt-listener";
-
+import { GoogleSheetsListener } from "./google-sheets/google-sheets-listener";
 const gptListener=new GPTListener();
-
+const googleSheetsListener=new GoogleSheetsListener();
 chrome.runtime.sendMessage(
     {type:"PING"},
     (response)=>{

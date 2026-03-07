@@ -3,6 +3,7 @@ import GPTHandler from "./gpt-module/gpt-handler";
 import { OtherHandler } from "./other-handler";
 import { PdfHandler } from "./pdf-module/pdf-handler";
 import { MenuManager } from "./menu-manager";
+import { GoogleSheetsHandler } from "./google-sheets-module/google-sheets-handler";
 import { StaticHandler } from "./static-module/static-handler";
 import { MENU_ID_GPT,MENU_ID_OTER,MENU_ID_PDF } from "../type";
 
@@ -16,6 +17,9 @@ genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
 
 const otherHandler=new OtherHandler();
 genericListener.addHandler((ev)=>otherHandler.onGenericEvent(ev));
+
+const googleSheetsHandler=new GoogleSheetsHandler();
+genericListener.addHandler((ev)=>googleSheetsHandler.onGenericEvent(ev));
 
 const staticHandler=new StaticHandler();
 genericListener.addHandler((ev)=>staticHandler.onGenericEvent(ev));

@@ -10,7 +10,7 @@ export const MENU_ID_PDF="create_hash_and_store_PDF";
 export const MENU_ID_GPT="create_hash_and_store_GPT";
 export const MENU_ID_OTER="create_hash_and_store_OTHER";
 export const MENU_ID_STATIC="create_hash_and_store_STATIC";
-
+export const MENU_ID_GOOGLE_SHEETS="create_hash_and_store_GOOGLE_SHEETS";
 export const NATIVE_HOST_NAME="trace_pilot_host_chrome";
 
 export type TracePilotRequest={
@@ -26,6 +26,7 @@ export enum COMMANDS {
   GOOGLE_SEARCH = 'googleSearch',
   PDF_OPEN='pdfOpen',
   STATIC_OPEN='staticOpen',
+  GOOGLE_SHEETS_OPEN="googleSheetsOpen",
 }
 
 
@@ -44,6 +45,7 @@ export enum RESPONSE_TYPE{
     OTHER="OTHER",
     CHROME_STATIC="CHROME_STATIC",
     GET_GIT="GET_GIT",
+    GOOGLE_SHEETS="GOOGLE_SHEETS",
 }
 
 export interface GetGitRepoMessage{
@@ -66,6 +68,7 @@ export type MessageToNativeHost =
   | ChatGptMessage
   | OtherMessage
   | ChromeStaticMessage
+  | GoogleSheetsMessage
 
 
 interface BaseMessage {
@@ -94,6 +97,11 @@ export interface OtherMessage extends BaseMessage {
   data: null;
 }
 
+export interface GoogleSheetsMessage{
+  type: RESPONSE_TYPE.GOOGLE_SHEETS;
+  data: GoogleSheetsData;
+}
+
 
 export interface PDFData{
 
@@ -107,4 +115,8 @@ export interface StaticData{
   mhtml_base64: string,
   encoding: "base64",
   title?: string,
+}
+
+export interface GoogleSheetsData{
+
 }

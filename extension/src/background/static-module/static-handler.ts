@@ -141,6 +141,7 @@ export class StaticHandler extends Handler{
 
     const marker=`${TRACE_PILOT_MARKER} ${metaHash}`;
     const clipboardText=`${marker}\n${plainText}`;
+    console.log("clipboard text: ",clipboardText);
 
     await writeClipboardViaContent(tabId,clipboardText);
   }
