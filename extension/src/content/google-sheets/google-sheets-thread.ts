@@ -38,6 +38,8 @@ export class GoogleSheetsThread{
   private selectedRepo: string | null = null;
   private selectedClipboard: ClipboardCaptureResult | null = null; // cellの内容
   private selectedCells: ReturnType<GoogleSheetsThread["resolveSelectedCells"]> | null = null; // 選択されたcell
+  private allCellsClipboard: ClipboardCaptureResult | null=null; // 全範囲コピー
+  private allCells: ReturnType<GoogleSheetsThread["resolveSelectedCells"]> | null = null; // 全範囲のcell
   private isBound = false;
   private readonly menuId: string;
   
@@ -393,10 +395,68 @@ export class GoogleSheetsThread{
     this.selectedRepo = repo;
     this.selectedClipboard = await this.captureSelectionClipboard();
     this.selectedCells = this.resolveSelectedCells(this.selectedClipboard);
+    this.allCellsClipboard = null;
+    this.allCells = null;
+
+    const selectedWholeSheet = await this.selectWholeSheet();
+    if(selectedWholeSheet){
+      this.allCellsClipboard = await this.captureSelectionClipboard();
+      this.allCells = this.resolveSelectedCells(this.allCellsClipboard);
+    }
 
     console.log("trace-pilot google sheets selected repo:", this.selectedRepo);
     console.log("trace-pilot google sheets clipboard capture:", this.selectedClipboard);
     console.log("trace-pilot google sheets selected cells:", this.selectedCells);
+    console.log("trace-pilot google sheets all cells clipboard:", this.allCellsClipboard);
+    console.log("trace-pilot google sheets all cells:", this.allCells);
+  }
+
+  private async selectWholeSheet(): Promise<boolean>{
+    const target = this.findWholeSheetSelectTarget();
+    if(!target){
+      return false;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const clientX = rect.left + Math.max(1, Math.min(8, rect.width / 2));
+    const clientY = rect.top + Math.max(1, Math.min(8, rect.height / 2));
+
+    for(const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]){
+      target.dispatchEvent(
+        new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          clientY,
+          button: 0,
+        })
+      );
+    }
+
+    await this.sleep(120);
+    this.latestStartA1 = "A1";
+    return true;
+  }
+
+  private findWholeSheetSelectTarget(): HTMLElement | null{
+    const rowHeaders = document.querySelector(".row-headers-background") as HTMLElement | null;
+    const columnHeaders = document.querySelector(".column-headers-background") as HTMLElement | null;
+    if(!rowHeaders || !columnHeaders){
+      return null;
+    }
+
+    const rowRect = rowHeaders.getBoundingClientRect();
+    const columnRect = columnHeaders.getBoundingClientRect();
+    const x = Math.max(1, rowRect.right - 4);
+    const y = Math.max(1, columnRect.bottom - 4);
+    // (x,y)の位置に見えている一番上の要素が返る
+    const target = document.elementFromPoint(x, y);
+
+    return target instanceof HTMLElement ? target : null;
+  }
+
+  private sleep(ms: number){
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
   private updateSelectedRepoLabel(){

@@ -420,6 +420,10 @@
           // cellの内容
           this.selectedCells = null;
           // 選択されたcell
+          this.allCellsClipboard = null;
+          // 全範囲コピー
+          this.allCells = null;
+          // 全範囲のcell
           this.isBound = false;
           this.handleContextMenu = (event) => {
             const isSpreadSheetsPage = this.isGoogleSheetsPage();
@@ -700,9 +704,57 @@
           this.selectedRepo = repo;
           this.selectedClipboard = await this.captureSelectionClipboard();
           this.selectedCells = this.resolveSelectedCells(this.selectedClipboard);
+          this.allCellsClipboard = null;
+          this.allCells = null;
+          const selectedWholeSheet = await this.selectWholeSheet();
+          if (selectedWholeSheet) {
+            this.allCellsClipboard = await this.captureSelectionClipboard();
+            this.allCells = this.resolveSelectedCells(this.allCellsClipboard);
+          }
           console.log("trace-pilot google sheets selected repo:", this.selectedRepo);
           console.log("trace-pilot google sheets clipboard capture:", this.selectedClipboard);
           console.log("trace-pilot google sheets selected cells:", this.selectedCells);
+          console.log("trace-pilot google sheets all cells clipboard:", this.allCellsClipboard);
+          console.log("trace-pilot google sheets all cells:", this.allCells);
+        }
+        async selectWholeSheet() {
+          const target = this.findWholeSheetSelectTarget();
+          if (!target) {
+            return false;
+          }
+          const rect = target.getBoundingClientRect();
+          const clientX = rect.left + Math.max(1, Math.min(8, rect.width / 2));
+          const clientY = rect.top + Math.max(1, Math.min(8, rect.height / 2));
+          for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+            target.dispatchEvent(
+              new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                clientX,
+                clientY,
+                button: 0
+              })
+            );
+          }
+          await this.sleep(120);
+          this.latestStartA1 = "A1";
+          return true;
+        }
+        findWholeSheetSelectTarget() {
+          const rowHeaders = document.querySelector(".row-headers-background");
+          const columnHeaders = document.querySelector(".column-headers-background");
+          if (!rowHeaders || !columnHeaders) {
+            return null;
+          }
+          const rowRect = rowHeaders.getBoundingClientRect();
+          const columnRect = columnHeaders.getBoundingClientRect();
+          const x = Math.max(1, rowRect.right - 4);
+          const y = Math.max(1, columnRect.bottom - 4);
+          const target = document.elementFromPoint(x, y);
+          return target instanceof HTMLElement ? target : null;
+        }
+        sleep(ms) {
+          return new Promise((resolve) => window.setTimeout(resolve, ms));
         }
         updateSelectedRepoLabel() {
           const label = this.menuEl?.querySelector('[data-role="selected-repo"]');
