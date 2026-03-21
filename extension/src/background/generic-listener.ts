@@ -51,6 +51,8 @@ export class GenericListener{
                 command = COMMANDS.STACKOVERFLOW_OPEN;
             } else if (url.startsWith("https://github.com")) {
                 command = COMMANDS.GITHUB_OPEN;
+            } else if(url.includes("google.com/spreadsheets")){
+              command=COMMANDS.GOOGLE_SHEETS_OPEN;
             }
 
             this.emit({ command, tabId, url, title: tab.title });

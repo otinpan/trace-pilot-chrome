@@ -24,7 +24,12 @@ genericListener.addHandler((ev)=>googleSheetsHandler.onGenericEvent(ev));
 const staticHandler=new StaticHandler();
 genericListener.addHandler((ev)=>staticHandler.onGenericEvent(ev));
 
-const menuManager=new MenuManager(pdfHandler,gptHandler,staticHandler);
+const menuManager=new MenuManager(
+    pdfHandler,
+    gptHandler,
+    staticHandler,
+    googleSheetsHandler
+);
 
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -34,7 +39,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return; // sync reply
     }
 });
-
 
 
 

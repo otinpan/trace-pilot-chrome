@@ -5,15 +5,17 @@ import {
     NATIVE_HOST_NAME,
     RESPONSE_TYPE,
     GetGitRepoMessage,
-    GetGitRepoResponse
+    GetGitRepoResponse,
+    MENU_ID_GOOGLE_SHEETS
 } from "../type";
 import GPTHandler from "./gpt-module/gpt-handler";
 import { OtherHandler } from "./other-handler";
 import { PdfHandler } from "./pdf-module/pdf-handler";
-
+import { GoogleSheetsHandler } from "./google-sheets-module/google-sheets-handler";
 const CHILD_PREFIX_PDF="tp:repo:pdf:";
 const CHILD_PREFIX_GPT="tp:repo:gpt:";
-const CHILD_PREFIX_STATIC="tp:repo:static:";
+const CHILD_PREFIX_STATIC="tp:repo:static:"
+const CHILD_PREFIX_GOOGLESHEETS="tp:repo:googlesheets:";
 
 export class MenuManager{
     constructor(
@@ -29,6 +31,10 @@ export class MenuManager{
              :{handleRepoClick
                 :(info:chrome.contextMenus.OnClickData,
                     tab:chrome.tabs.Tab,repoPath:string)=>Promise<void>},
+        private readonly googleSheetsHandler
+              :{handleRepoClick
+                :(info:chrome.contextMenus.OnClickData,
+                 tab:chrome.tabs.Tab,repoPath:string)=>Promise<void>},
     ){
         this.init();
         this.listenClicks();
@@ -63,6 +69,13 @@ export class MenuManager{
                 id: MENU_ID_STATIC,
                 enabled: false
             });
+            chrome.contextMenus.create({
+              type: "normal",
+              title: "create hash and store with trace-pilot (GoogleSpreadSheets)",
+              contexts: ["selection","page"],
+              id: MENU_ID_GOOGLE_SHEETS,
+              enabled: false
+            })
         });
     }
 
@@ -128,6 +141,14 @@ export class MenuManager{
             enabled: filtered.length>0,
         });
 
+        chrome.contextMenus.create({
+          type: "normal",
+          title: "create hash and store with trace-pilot (GoogleSpreadSheets)",
+          contexts: ["selection","page"],
+          id: MENU_ID_GOOGLE_SHEETS,
+          enabled: filtered.length>0,
+        });
+
         // pdf
         for (const repo of filtered){
             chrome.contextMenus.create({
@@ -160,6 +181,17 @@ export class MenuManager{
                 enabled: true,
             });
         }
+
+        // google spread sheets
+        for (const repo of filtered){
+          chrome.contextMenus.create({
+            parentId: MENU_ID_GOOGLE_SHEETS,
+            id: makeChildIdGoogleSheets(repo),
+            title: repo,
+            contexts: ["selection","page"],
+            enabled: true,
+          });
+        }
     }
 
     private listenClicks(){
@@ -173,7 +205,12 @@ export class MenuManager{
             const menuId=String(info.menuItemId);
 
             // 親は何もしない
-            if(menuId===MENU_ID_PDF||menuId===MENU_ID_GPT||menuId===MENU_ID_STATIC)return;
+            if(
+                menuId===MENU_ID_PDF ||
+                menuId===MENU_ID_GPT ||
+                menuId===MENU_ID_STATIC ||
+                menuId===MENU_ID_GOOGLE_SHEETS
+            ) return;
 
             // 子 pdf
             if(menuId.startsWith(CHILD_PREFIX_PDF)){
@@ -194,6 +231,13 @@ export class MenuManager{
                 const repo=decodedRepoId(menuId.slice(CHILD_PREFIX_STATIC.length));
                 await this.staticHandler.handleRepoClick(info,tab,repo);
                 return;
+            }
+
+            // 子 googlesheets
+            if(menuId.startsWith(CHILD_PREFIX_GOOGLESHEETS)){
+              const repo=decodedRepoId(menuId.slice(CHILD_PREFIX_GOOGLESHEETS.length));
+              await this.googleSheetsHandler.handleRepoClick(info,tab,repo);
+              return;
             }
 
         })
@@ -219,4 +263,8 @@ function makeChildIdGpt(repoPath:string){
 
 function makeChildIdStatic(repoPath:string){
     return CHILD_PREFIX_STATIC+encodedRepoId(repoPath);
+}
+
+function makeChildIdGoogleSheets(repoPath:string){
+  return CHILD_PREFIX_GOOGLESHEETS+encodedRepoId(repoPath);
 }

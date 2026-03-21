@@ -7,7 +7,7 @@ var __commonJS = (cb, mod) => function __require() {
 };
 
 // type.ts
-var TRACE_PILOT_MARKER, MENU_ID_PDF, MENU_ID_GPT, MENU_ID_OTER, MENU_ID_STATIC, NATIVE_HOST_NAME;
+var TRACE_PILOT_MARKER, MENU_ID_PDF, MENU_ID_GPT, MENU_ID_OTER, MENU_ID_STATIC, MENU_ID_GOOGLE_SHEETS, NATIVE_HOST_NAME;
 var init_type = __esm({
   "type.ts"() {
     "use strict";
@@ -16,6 +16,7 @@ var init_type = __esm({
     MENU_ID_GPT = "create_hash_and_store_GPT";
     MENU_ID_OTER = "create_hash_and_store_OTHER";
     MENU_ID_STATIC = "create_hash_and_store_STATIC";
+    MENU_ID_GOOGLE_SHEETS = "create_hash_and_store_GOOGLE_SHEETS";
     NATIVE_HOST_NAME = "trace_pilot_host_chrome";
   }
 });
@@ -80,6 +81,8 @@ var init_generic_listener = __esm({
             command = "stackoverflowOpen" /* STACKOVERFLOW_OPEN */;
           } else if (url.startsWith("https://github.com")) {
             command = "githubOpen" /* GITHUB_OPEN */;
+          } else if (url.includes("google.com/spreadsheets")) {
+            command = "googleSheetsOpen" /* GOOGLE_SHEETS_OPEN */;
           }
           this.emit({ command, tabId, url, title: tab.title });
         });
@@ -456,7 +459,10 @@ function makeChildIdGpt(repoPath) {
 function makeChildIdStatic(repoPath) {
   return CHILD_PREFIX_STATIC + encodedRepoId(repoPath);
 }
-var CHILD_PREFIX_PDF, CHILD_PREFIX_GPT, CHILD_PREFIX_STATIC, MenuManager;
+function makeChildIdGoogleSheets(repoPath) {
+  return CHILD_PREFIX_GOOGLESHEETS + encodedRepoId(repoPath);
+}
+var CHILD_PREFIX_PDF, CHILD_PREFIX_GPT, CHILD_PREFIX_STATIC, CHILD_PREFIX_GOOGLESHEETS, MenuManager;
 var init_menu_manager = __esm({
   "background/menu-manager.ts"() {
     "use strict";
@@ -464,11 +470,13 @@ var init_menu_manager = __esm({
     CHILD_PREFIX_PDF = "tp:repo:pdf:";
     CHILD_PREFIX_GPT = "tp:repo:gpt:";
     CHILD_PREFIX_STATIC = "tp:repo:static:";
+    CHILD_PREFIX_GOOGLESHEETS = "tp:repo:googlesheets:";
     MenuManager = class {
-      constructor(pdfHandler, gptHandler, staticHandler) {
+      constructor(pdfHandler, gptHandler, staticHandler, googleSheetsHandler) {
         this.pdfHandler = pdfHandler;
         this.gptHandler = gptHandler;
         this.staticHandler = staticHandler;
+        this.googleSheetsHandler = googleSheetsHandler;
         this.cachedRepos = [];
         this.init();
         this.listenClicks();
@@ -495,6 +503,13 @@ var init_menu_manager = __esm({
             title: "create hash and store with trace-pilot (Static)",
             contexts: ["selection", "page"],
             id: MENU_ID_STATIC,
+            enabled: false
+          });
+          chrome.contextMenus.create({
+            type: "normal",
+            title: "create hash and store with trace-pilot (GoogleSpreadSheets)",
+            contexts: ["selection", "page"],
+            id: MENU_ID_GOOGLE_SHEETS,
             enabled: false
           });
         });
@@ -550,6 +565,13 @@ var init_menu_manager = __esm({
           id: MENU_ID_STATIC,
           enabled: filtered.length > 0
         });
+        chrome.contextMenus.create({
+          type: "normal",
+          title: "create hash and store with trace-pilot (GoogleSpreadSheets)",
+          contexts: ["selection", "page"],
+          id: MENU_ID_GOOGLE_SHEETS,
+          enabled: filtered.length > 0
+        });
         for (const repo of filtered) {
           chrome.contextMenus.create({
             parentId: MENU_ID_PDF,
@@ -577,6 +599,15 @@ var init_menu_manager = __esm({
             enabled: true
           });
         }
+        for (const repo of filtered) {
+          chrome.contextMenus.create({
+            parentId: MENU_ID_GOOGLE_SHEETS,
+            id: makeChildIdGoogleSheets(repo),
+            title: repo,
+            contexts: ["selection", "page"],
+            enabled: true
+          });
+        }
       }
       listenClicks() {
         chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -585,7 +616,7 @@ var init_menu_manager = __esm({
             return;
           }
           const menuId = String(info.menuItemId);
-          if (menuId === MENU_ID_PDF || menuId === MENU_ID_GPT || menuId === MENU_ID_STATIC) return;
+          if (menuId === MENU_ID_PDF || menuId === MENU_ID_GPT || menuId === MENU_ID_STATIC || menuId === MENU_ID_GOOGLE_SHEETS) return;
           if (menuId.startsWith(CHILD_PREFIX_PDF)) {
             const repo = decodedRepoId(menuId.slice(CHILD_PREFIX_PDF.length));
             await this.pdfHandler.handleRepoClick(info, tab, repo);
@@ -601,7 +632,86 @@ var init_menu_manager = __esm({
             await this.staticHandler.handleRepoClick(info, tab, repo);
             return;
           }
+          if (menuId.startsWith(CHILD_PREFIX_GOOGLESHEETS)) {
+            const repo = decodedRepoId(menuId.slice(CHILD_PREFIX_GOOGLESHEETS.length));
+            await this.googleSheetsHandler.handleRepoClick(info, tab, repo);
+            return;
+          }
         });
+      }
+    };
+  }
+});
+
+// background/google-sheets-module/google-sheets-handler.ts
+var GoogleSheetsHandler;
+var init_google_sheets_handler = __esm({
+  "background/google-sheets-module/google-sheets-handler.ts"() {
+    "use strict";
+    init_type();
+    init_handler();
+    GoogleSheetsHandler = class extends Handler {
+      constructor() {
+        super(MENU_ID_GOOGLE_SHEETS);
+      }
+      onGenericEvent(ev) {
+        if (ev.command == "googleSheetsOpen" /* GOOGLE_SHEETS_OPEN */ && ev.url && ev.title) {
+          console.log("google sheets");
+          if (!ev.url) return;
+          if (!ev.title) return;
+          this.setEnabled(true);
+          chrome.tabs.sendMessage(ev.tabId, {
+            kind: "GOOGLE_SHEETS_START_OBSERVE",
+            url: ev.url,
+            title: ev.title
+          }).catch(() => {
+            return;
+          });
+        } else {
+          this.setEnabled(false);
+        }
+      }
+      async getValidTabId(info, tab) {
+        const i = info;
+        const cands = [
+          i.tabId,
+          tab.id
+        ].filter((x) => typeof x === "number");
+        const ok = cands.find((id) => id >= 0);
+        if (ok != null) return ok;
+        const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (active?.id != null && active.id >= 0) return active.id;
+        return null;
+      }
+      async handleRepoClick(info, tab, repoPath) {
+        await this.onMenuClick(info, tab, repoPath);
+      }
+      async onMenuClick(info, tab, repoPath) {
+        const tabId = await this.getValidTabId(info, tab);
+        if (tabId == null || tabId < 0) {
+          console.error("no valid tabId", tabId);
+          return;
+        }
+        const rawUrl = tab.url || "";
+        if (tabId == null) return;
+        if (!rawUrl) {
+          return;
+        }
+        let result;
+        try {
+          result = await chrome.tabs.sendMessage(tabId, {
+            kind: "FORCE_RESPONSE_SHEETS_DOM",
+            url: rawUrl
+          });
+        } catch (e) {
+          console.warn("sendMessage FORCE_RESPONSE_SHEETS_DOM returned empty", result);
+          return;
+        }
+        console.log("result:", result);
+        const plainText = info.selectionText;
+        if (plainText === void 0) {
+          return;
+        }
       }
     };
   }
@@ -726,6 +836,7 @@ var require_background = __commonJS({
     init_other_handler();
     init_pdf_handler();
     init_menu_manager();
+    init_google_sheets_handler();
     init_static_handler();
     var genericListener = new generic_listener_default();
     var pdfHandler = new PdfHandler();
@@ -734,9 +845,16 @@ var require_background = __commonJS({
     genericListener.addHandler((ev) => gptHandler.onGenericEvent(ev));
     var otherHandler = new OtherHandler();
     genericListener.addHandler((ev) => otherHandler.onGenericEvent(ev));
+    var googleSheetsHandler = new GoogleSheetsHandler();
+    genericListener.addHandler((ev) => googleSheetsHandler.onGenericEvent(ev));
     var staticHandler = new StaticHandler();
     genericListener.addHandler((ev) => staticHandler.onGenericEvent(ev));
-    var menuManager = new MenuManager(pdfHandler, gptHandler, staticHandler);
+    var menuManager = new MenuManager(
+      pdfHandler,
+      gptHandler,
+      staticHandler,
+      googleSheetsHandler
+    );
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg && typeof msg === "object" && msg.type === "PING") {
         sendResponse({ ok: true, from: "background" });
