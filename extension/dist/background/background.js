@@ -459,10 +459,7 @@ function makeChildIdGpt(repoPath) {
 function makeChildIdStatic(repoPath) {
   return CHILD_PREFIX_STATIC + encodedRepoId(repoPath);
 }
-function makeChildIdGoogleSheets(repoPath) {
-  return CHILD_PREFIX_GOOGLESHEETS + encodedRepoId(repoPath);
-}
-var CHILD_PREFIX_PDF, CHILD_PREFIX_GPT, CHILD_PREFIX_STATIC, CHILD_PREFIX_GOOGLESHEETS, MenuManager;
+var CHILD_PREFIX_PDF, CHILD_PREFIX_GPT, CHILD_PREFIX_STATIC, MenuManager;
 var init_menu_manager = __esm({
   "background/menu-manager.ts"() {
     "use strict";
@@ -470,7 +467,6 @@ var init_menu_manager = __esm({
     CHILD_PREFIX_PDF = "tp:repo:pdf:";
     CHILD_PREFIX_GPT = "tp:repo:gpt:";
     CHILD_PREFIX_STATIC = "tp:repo:static:";
-    CHILD_PREFIX_GOOGLESHEETS = "tp:repo:googlesheets:";
     MenuManager = class {
       constructor(pdfHandler, gptHandler, staticHandler, googleSheetsHandler) {
         this.pdfHandler = pdfHandler;
@@ -480,6 +476,7 @@ var init_menu_manager = __esm({
         this.cachedRepos = [];
         this.init();
         this.listenClicks();
+        this.listenGoogleSheetsTabs();
         void this.refreshReposAndMenus();
       }
       init() {
@@ -505,19 +502,39 @@ var init_menu_manager = __esm({
             id: MENU_ID_STATIC,
             enabled: false
           });
-          chrome.contextMenus.create({
-            type: "normal",
-            title: "create hash and store with trace-pilot (GoogleSpreadSheets)",
-            contexts: ["selection", "page"],
-            id: MENU_ID_GOOGLE_SHEETS,
-            enabled: false
-          });
+        });
+      }
+      listenGoogleSheetsTabs() {
+        chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+          if (changeInfo.status !== "complete") return;
+          const url = tab.url ?? "";
+          if (!url.startsWith("https://docs.google.com/spreadsheets/")) return;
+          void this.sendReposToGoogleSheetsTab(tabId, this.cachedRepos);
         });
       }
       async refreshReposAndMenus() {
         const repos = await this.getGitRepos();
         this.cachedRepos = repos;
+        await this.sendReposToGoogleSheetsTabs(repos);
         await this.rebuildMenus(repos);
+      }
+      async sendReposToGoogleSheetsTabs(repos) {
+        const tabs = await chrome.tabs.query({
+          url: ["https://docs.google.com/spreadsheets/*"]
+        });
+        await Promise.all(
+          tabs.filter((tab) => typeof tab.id === "number").map((tab) => this.sendReposToGoogleSheetsTab(tab.id, repos))
+        );
+      }
+      async sendReposToGoogleSheetsTab(tabId, repos) {
+        try {
+          await chrome.tabs.sendMessage(tabId, {
+            kind: "GOOGLE_SHEETS_REPOS_UPDATED",
+            repos
+          });
+        } catch {
+          return;
+        }
       }
       async getGitRepos() {
         const msg = {
@@ -565,13 +582,6 @@ var init_menu_manager = __esm({
           id: MENU_ID_STATIC,
           enabled: filtered.length > 0
         });
-        chrome.contextMenus.create({
-          type: "normal",
-          title: "create hash and store with trace-pilot (GoogleSpreadSheets)",
-          contexts: ["selection", "page"],
-          id: MENU_ID_GOOGLE_SHEETS,
-          enabled: filtered.length > 0
-        });
         for (const repo of filtered) {
           chrome.contextMenus.create({
             parentId: MENU_ID_PDF,
@@ -599,15 +609,6 @@ var init_menu_manager = __esm({
             enabled: true
           });
         }
-        for (const repo of filtered) {
-          chrome.contextMenus.create({
-            parentId: MENU_ID_GOOGLE_SHEETS,
-            id: makeChildIdGoogleSheets(repo),
-            title: repo,
-            contexts: ["selection", "page"],
-            enabled: true
-          });
-        }
       }
       listenClicks() {
         chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -630,11 +631,6 @@ var init_menu_manager = __esm({
           if (menuId.startsWith(CHILD_PREFIX_STATIC)) {
             const repo = decodedRepoId(menuId.slice(CHILD_PREFIX_STATIC.length));
             await this.staticHandler.handleRepoClick(info, tab, repo);
-            return;
-          }
-          if (menuId.startsWith(CHILD_PREFIX_GOOGLESHEETS)) {
-            const repo = decodedRepoId(menuId.slice(CHILD_PREFIX_GOOGLESHEETS.length));
-            await this.googleSheetsHandler.handleRepoClick(info, tab, repo);
             return;
           }
         });

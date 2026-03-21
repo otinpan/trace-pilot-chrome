@@ -414,6 +414,12 @@
           this.menuEl = null;
           this.latestPosition = null;
           this.latestStartA1 = null;
+          this.repos = [];
+          this.selectedRepo = null;
+          this.selectedClipboard = null;
+          // cellの内容
+          this.selectedCells = null;
+          // 選択されたcell
           this.isBound = false;
           this.handleContextMenu = (event) => {
             const isSpreadSheetsPage = this.isGoogleSheetsPage();
@@ -457,6 +463,12 @@
         init() {
           this.initPageObserver();
           this.initListener();
+        }
+        setRepos(repos) {
+          this.repos = repos.filter((repo) => !repo.endsWith(".trace-worktree"));
+          console.log("trace-pilot google sheets repos:", repos);
+          this.renderRepoList();
+          this.updateSelectedRepoLabel();
         }
         getThreadContainer() {
           if (this.selectors.container) {
@@ -507,7 +519,6 @@
           const borders = Array.from(
             document.querySelectorAll(".range-border.active-cell-border")
           );
-          console.log("num of selected cell: ", borders.length);
           const rects = borders.filter((el) => this.isVisible(el)).map((el) => el.getBoundingClientRect()).filter((rect) => rect.width > 0 || rect.height > 0);
           return this.mergeRects(rects);
         }
@@ -549,6 +560,8 @@
           if (hintEl) {
             hintEl.textContent = anchor.label;
           }
+          this.updateSelectedRepoLabel();
+          this.showPrimaryActions();
           const baseX = position.x || anchor.rect.right;
           const baseY = position.y || anchor.rect.bottom;
           menu.style.left = `${Math.max(8, Math.min(baseX - 200, window.innerWidth - 220))}px`;
@@ -579,6 +592,14 @@
           label.style.color = "#5f6368";
           label.style.marginBottom = "6px";
           label.textContent = "Google Sheets cell";
+          const selectedRepoLabel = document.createElement("div");
+          selectedRepoLabel.setAttribute("data-role", "selected-repo");
+          selectedRepoLabel.style.fontSize = "12px";
+          selectedRepoLabel.style.color = "#1f1f1f";
+          selectedRepoLabel.style.marginBottom = "8px";
+          selectedRepoLabel.textContent = "Repo: not selected";
+          const actions = document.createElement("div");
+          actions.setAttribute("data-role", "primary-actions");
           const button = document.createElement("button");
           button.type = "button";
           button.textContent = "trace-pilot";
@@ -591,25 +612,102 @@
           button.style.fontSize = "14px";
           button.style.fontWeight = "600";
           button.style.cursor = "pointer";
-          button.addEventListener("click", async (event) => {
+          button.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
-            const result = await this.captureSelectionClipboard();
-            console.log("trace-pilot google sheets clipboard capture:", result);
-            const selectionCells = this.resolveSelectedCells(result);
-            console.log("trace-pilot google sheets selected cells:", selectionCells);
-            this.hideMenu();
+            this.showRepoList();
           });
+          const repoList = document.createElement("div");
+          repoList.setAttribute("data-role", "repo-list");
+          repoList.style.display = "none";
+          repoList.style.maxHeight = "240px";
+          repoList.style.overflowY = "auto";
+          repoList.style.marginTop = "8px";
+          actions.appendChild(button);
           wrapper.appendChild(label);
-          wrapper.appendChild(button);
+          wrapper.appendChild(selectedRepoLabel);
+          wrapper.appendChild(actions);
+          wrapper.appendChild(repoList);
           document.body.appendChild(wrapper);
           this.menuEl = wrapper;
+          this.renderRepoList();
+          this.updateSelectedRepoLabel();
           return wrapper;
         }
         hideMenu() {
           if (this.menuEl) {
             this.menuEl.style.display = "none";
           }
+        }
+        showPrimaryActions() {
+          const actions = this.menuEl?.querySelector('[data-role="primary-actions"]');
+          const repoList = this.menuEl?.querySelector('[data-role="repo-list"]');
+          if (actions) actions.style.display = "block";
+          if (repoList) repoList.style.display = "none";
+        }
+        showRepoList() {
+          this.renderRepoList();
+          const actions = this.menuEl?.querySelector('[data-role="primary-actions"]');
+          const repoList = this.menuEl?.querySelector('[data-role="repo-list"]');
+          if (actions) actions.style.display = "none";
+          if (repoList) repoList.style.display = "block";
+        }
+        renderRepoList() {
+          const repoList = this.menuEl?.querySelector('[data-role="repo-list"]');
+          if (!repoList) return;
+          repoList.replaceChildren();
+          const title = document.createElement("div");
+          title.textContent = "Select repo";
+          title.style.fontSize = "12px";
+          title.style.fontWeight = "600";
+          title.style.color = "#5f6368";
+          title.style.marginBottom = "8px";
+          repoList.appendChild(title);
+          if (this.repos.length === 0) {
+            const empty = document.createElement("div");
+            empty.textContent = "No repositories available";
+            empty.style.fontSize = "12px";
+            empty.style.color = "#5f6368";
+            repoList.appendChild(empty);
+            return;
+          }
+          for (const repo of this.repos) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = repo;
+            button.style.display = "block";
+            button.style.width = "100%";
+            button.style.marginBottom = "6px";
+            button.style.padding = "8px 10px";
+            button.style.border = repo === this.selectedRepo ? "1px solid #0f9d58" : "1px solid rgba(0,0,0,0.12)";
+            button.style.borderRadius = "8px";
+            button.style.background = repo === this.selectedRepo ? "#e6f4ea" : "#ffffff";
+            button.style.color = "#202124";
+            button.style.textAlign = "left";
+            button.style.cursor = "pointer";
+            button.style.fontSize = "12px";
+            button.addEventListener("click", async (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              await this.onMenuClick(repo);
+              this.updateSelectedRepoLabel();
+              this.showPrimaryActions();
+            });
+            repoList.appendChild(button);
+          }
+        }
+        async onMenuClick(repo) {
+          this.selectedRepo = repo;
+          this.selectedClipboard = await this.captureSelectionClipboard();
+          this.selectedCells = this.resolveSelectedCells(this.selectedClipboard);
+          console.log("trace-pilot google sheets selected repo:", this.selectedRepo);
+          console.log("trace-pilot google sheets clipboard capture:", this.selectedClipboard);
+          console.log("trace-pilot google sheets selected cells:", this.selectedCells);
+        }
+        updateSelectedRepoLabel() {
+          const label = this.menuEl?.querySelector('[data-role="selected-repo"]');
+          if (!label) return;
+          label.textContent = this.selectedRepo ? `Repo: ${this.selectedRepo}` : "Repo: not selected";
         }
         async captureSelectionClipboard() {
           const execResult = await this.captureClipboardByCopyEvent();
@@ -916,6 +1014,7 @@
         constructor() {
           this.thread = /* @__PURE__ */ new Map();
           this.activeThread = null;
+          this.pendingRepos = [];
           this.init();
         }
         init() {
@@ -927,6 +1026,12 @@
           }
           chrome.runtime.onMessage.addListener((request) => {
             if (!request || typeof request !== "object") return;
+            if (request.kind === "GOOGLE_SHEETS_REPOS_UPDATED") {
+              const repos = Array.isArray(request.repos) ? request.repos.filter((repo) => typeof repo === "string") : [];
+              this.pendingRepos = repos;
+              this.activeThread?.setRepos(repos);
+              return;
+            }
             if (request.kind !== "GOOGLE_SHEETS_START_OBSERVE") return;
             const url = typeof request.url === "string" ? request.url : window.location.href;
             const title = typeof request.title === "string" ? request.title : document.title;
@@ -940,9 +1045,15 @@
           if (existing) {
             this.activeThread = existing;
             existing.initPageObserver();
+            if (this.pendingRepos.length > 0) {
+              existing.setRepos(this.pendingRepos);
+            }
             return;
           }
           const newThread = new GoogleSheetsThread(key, title);
+          if (this.pendingRepos.length > 0) {
+            newThread.setRepos(this.pendingRepos);
+          }
           this.thread.set(key, newThread);
           this.activeThread = newThread;
         }

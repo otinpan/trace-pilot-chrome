@@ -38,6 +38,7 @@ export class MenuManager{
     ){
         this.init();
         this.listenClicks();
+        this.listenGoogleSheetsTabs();
         void this.refreshReposAndMenus();
     }
 
@@ -69,6 +70,7 @@ export class MenuManager{
                 id: MENU_ID_STATIC,
                 enabled: false
             });
+            /*
             chrome.contextMenus.create({
               type: "normal",
               title: "create hash and store with trace-pilot (GoogleSpreadSheets)",
@@ -76,13 +78,49 @@ export class MenuManager{
               id: MENU_ID_GOOGLE_SHEETS,
               enabled: false
             })
+            */
+        });
+    }
+
+    private listenGoogleSheetsTabs(){
+        chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+            if(changeInfo.status !== "complete") return;
+
+            const url = tab.url ?? "";
+            if(!url.startsWith("https://docs.google.com/spreadsheets/")) return;
+
+            void this.sendReposToGoogleSheetsTab(tabId, this.cachedRepos);
         });
     }
 
     private async refreshReposAndMenus(){
         const repos=await this.getGitRepos();
         this.cachedRepos=repos;
+        await this.sendReposToGoogleSheetsTabs(repos);
         await this.rebuildMenus(repos);
+    }
+
+    private async sendReposToGoogleSheetsTabs(repos: string[]):Promise<void>{
+        const tabs = await chrome.tabs.query({
+            url: ["https://docs.google.com/spreadsheets/*"],
+        });
+
+        await Promise.all(
+            tabs
+                .filter((tab): tab is chrome.tabs.Tab & { id: number } => typeof tab.id === "number")
+                .map((tab) => this.sendReposToGoogleSheetsTab(tab.id, repos))
+        );
+    }
+
+    private async sendReposToGoogleSheetsTab(tabId: number, repos: string[]):Promise<void>{
+        try{
+            await chrome.tabs.sendMessage(tabId, {
+                kind: "GOOGLE_SHEETS_REPOS_UPDATED",
+                repos,
+            });
+        }catch{
+            return;
+        }
     }
 
     private async getGitRepos():Promise<string[]>{
@@ -141,6 +179,7 @@ export class MenuManager{
             enabled: filtered.length>0,
         });
 
+        /*
         chrome.contextMenus.create({
           type: "normal",
           title: "create hash and store with trace-pilot (GoogleSpreadSheets)",
@@ -148,6 +187,7 @@ export class MenuManager{
           id: MENU_ID_GOOGLE_SHEETS,
           enabled: filtered.length>0,
         });
+        */
 
         // pdf
         for (const repo of filtered){
@@ -183,6 +223,7 @@ export class MenuManager{
         }
 
         // google spread sheets
+        /*
         for (const repo of filtered){
           chrome.contextMenus.create({
             parentId: MENU_ID_GOOGLE_SHEETS,
@@ -192,6 +233,7 @@ export class MenuManager{
             enabled: true,
           });
         }
+        */
     }
 
     private listenClicks(){
@@ -234,11 +276,13 @@ export class MenuManager{
             }
 
             // 子 googlesheets
+            /*
             if(menuId.startsWith(CHILD_PREFIX_GOOGLESHEETS)){
               const repo=decodedRepoId(menuId.slice(CHILD_PREFIX_GOOGLESHEETS.length));
               await this.googleSheetsHandler.handleRepoClick(info,tab,repo);
               return;
             }
+            */
 
         })
     }
