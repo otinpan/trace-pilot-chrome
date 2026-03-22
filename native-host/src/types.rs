@@ -11,6 +11,8 @@ pub enum WebInfoSource {
     ChromePDF,
     #[serde(rename="CHROME_STATIC")]
     ChromeStatic,
+    #[serde(rename="GOOGLE_SHEETS")]
+    GoogleSheets,
     #[serde(rename = "VSCODE")]
     Vscode,
     #[serde(rename = "OTHER")]
@@ -38,6 +40,7 @@ pub enum AdditionalHash{
     ChromePDFHash(ChromePDFHash),
     ChromeStaticHash(ChromeStaticHash),
     GPTHash(GPTHash),
+    GoogleSheetsHash(GoogleSheetsHash),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
@@ -62,6 +65,12 @@ pub struct ChromePDFHash{
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
 pub struct ChromeStaticHash{
     pub mhtmlHash:String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
+pub struct GoogleSheetsHash{
+    pub selectedHash:String,
+    pub snapshotHash:String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
@@ -95,6 +104,7 @@ pub enum AdditionalMetadata {
     VSCodeMetadata(VSCodeMetadata),
     ChromePDFMetadata(ChromePDFMetadata),
     ChromeStaticMetadata(ChromeStaticMetadata),
+    GoogleSheetsMetadata(GoogleSheetsMetadata),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
@@ -118,6 +128,12 @@ pub struct ChromeStaticMetadata{
     pub isText: bool,
     pub encoding: String,
     pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize,JsonSchema)]
+pub struct GoogleSheetsMetadata{
+    pub isText: bool,
+    pub name: Option<String>,
 }
 
 
@@ -155,6 +171,14 @@ pub enum RequestFromChrome {
         repoPath: String,
     },
 
+    #[serde(rename = "GOOGLE_SHEETS")]
+    GoogleSheet{
+        data: GoogleSheetsData,
+        url: String,
+        plain_text: String,
+        repoPath: String,
+    },
+
     #[serde(rename = "OTHER")]
     Other {
         data: Option<serde_json::Value>, // or omit data entirely, どっちでも
@@ -185,6 +209,13 @@ pub struct StaticData{
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoogleSheetsData{
+    pub selected_area: SelectedArea,
+    pub cell_snapshot: CellSnapshot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodeBlock {
     pub code: String,
     #[serde(default)]
@@ -212,3 +243,19 @@ pub struct GetGitRepoResponse{
     pub git_repo:Vec<String>,
 }
 
+#[derive(Debug,Clone,Serialize,Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectedArea{
+    pub startA1: String,
+    pub rowCount: i64,
+    pub colCount: i64,
+}
+
+#[derive(Debug,Clone,Serialize,Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CellSnapshot{
+    pub name: String,
+    pub rows: Vec<Vec<String>>,
+    pub rowCount: i64,
+    pub colCount: i64,
+}

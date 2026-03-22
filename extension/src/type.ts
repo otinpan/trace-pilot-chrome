@@ -1,5 +1,5 @@
 import { ThreadPair } from "./content/gpt-module/gpt-thread";
-
+import { SelectedArea,CellSnapshot } from "./content/google-sheets/google-sheets-thread";
 // marker
 export const TRACE_PILOT_MARKER:string="// @trace-pilot";
 
@@ -97,7 +97,7 @@ export interface OtherMessage extends BaseMessage {
   data: null;
 }
 
-export interface GoogleSheetsMessage{
+export interface GoogleSheetsMessage extends BaseMessage{
   type: RESPONSE_TYPE.GOOGLE_SHEETS;
   data: GoogleSheetsData;
 }
@@ -118,5 +118,6 @@ export interface StaticData{
 }
 
 export interface GoogleSheetsData{
-
+  selectedArea: SelectedArea,
+  cellSnapshot: CellSnapshot,
 }

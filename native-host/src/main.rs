@@ -77,6 +77,13 @@ async fn async_main() -> Result<()> {
             eprintln!("resp {}",resp.metaHash);
             write_output_bytes(&resp_json).context("write_output failed")?;
         }
+        types::RequestFromChrome::GoogleSheet {url,plain_text,data,repoPath}=>{
+            let meta_hash=hash_and_store_google_sheets(url,plain_text,data,repoPath).await?;
+            let resp=Response{metaHash: meta_hash};
+            let resp_json=serde_json::to_vec(&resp).context("failed to serialize response")?;
+            eprintln!("resp {}",resp.metaHash);
+            write_output_bytes(&resp_json).context("write_output failed")?;
+        }
        types::RequestFromChrome::Other { .. } => {
             anyhow::bail!("expected CHROME_PDF or CHAT_GPT request")
         }
@@ -285,6 +292,61 @@ async fn hash_and_store_static(url: String, plain_text: String,data: types::Stat
                     isText: false,
                     encoding: data.encoding,
                     title: data.title,
+                }
+            )
+        ),
+    };
+
+    eprintln!("{:?}", meta);
+
+    let meta_json = serde_json::to_string(&meta)?;
+    let meta_hash = hash_and_store::calculate_hash_and_store_text(cwd, &meta_json)?;
+    Ok(meta_hash)
+}
+
+async fn hash_and_store_google_sheets(
+    url: String,
+    plain_text: String,
+    data: types::GoogleSheetsData,
+    repoPath: String
+)->Result<String>{
+    let cwd = repoPath.as_str();
+
+    let original_hash = hash_and_store::calculate_hash_and_store_text(cwd, &plain_text)?;
+    eprintln!("original_hash: {}", original_hash);
+
+    let selected_json=serde_json::to_string(&data.selected_area)?;
+    let snapshot_json = serde_json::to_string(&data.cell_snapshot)?;
+
+    let selected_hash=hash_and_store::calculate_hash_and_store_text(cwd,&selected_json)?;
+    let snapshot_hash = hash_and_store::calculate_hash_and_store_text(cwd, &snapshot_json)?;
+
+    eprintln!("selected_hash: {}",selected_hash);
+    eprintln!("snapshot_hash: {}", snapshot_hash);
+
+    let meta = types::Metadata {
+        originalHash: original_hash,
+        additionalHash: Some(
+            types::AdditionalHash::GoogleSheetsHash(
+                types::GoogleSheetsHash {
+                    selectedHash: selected_hash,
+                    snapshotHash: snapshot_hash,
+                }
+            )
+        ),
+        url,
+        r#type: types::WebInfoSource::GoogleSheets,
+        timeCopied: Utc::now().to_rfc3339(),
+        timeCopiedNumber: Utc::now().timestamp_millis(),
+        additionalMetaData: Some(
+            types::AdditionalMetadata::GoogleSheetsMetadata(
+                types::GoogleSheetsMetadata {
+                    isText: false,
+                    name: if data.cell_snapshot.name.is_empty() {
+                        None
+                    } else {
+                        Some(data.cell_snapshot.name.clone())
+                    },
                 }
             )
         ),

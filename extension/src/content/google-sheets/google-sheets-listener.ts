@@ -21,7 +21,7 @@ export class GoogleSheetsListener{
       if(!request || typeof request !== "object") return;
       if((request as any).kind === "GOOGLE_SHEETS_REPOS_UPDATED"){
         const repos = Array.isArray((request as any).repos)
-          ? (request as any).repos.filter((repo): repo is string => typeof repo === "string")
+          ? (request as any).repos.filter((repo: unknown): repo is string => typeof repo === "string")
           : [];
         this.pendingRepos = repos;
         this.activeThread?.setRepos(repos);

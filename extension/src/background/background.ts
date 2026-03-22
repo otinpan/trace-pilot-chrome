@@ -38,10 +38,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       console.log("first message is sccessed!");
       return; // sync reply
     }
+
+    if(msg && typeof msg === "object" && (msg as any).kind === "GOOGLE_SHEETS_CELLDATAS"){
+      (async () => {
+        const response = await googleSheetsHandler.handleContentMessage(
+          msg as any,
+          sender.tab?.id ?? null,
+        );
+        sendResponse(response);
+      })();
+      return true;
+    }
 });
-
-
-
 
 
 

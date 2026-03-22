@@ -2,13 +2,12 @@ import{
   MENU_ID_GOOGLE_SHEETS,
   COMMANDS,
   GenericEvent,
-  NATIVE_HOST_NAME,
   MessageToNativeHost,
-  TRACE_PILOT_MARKER,
   RESPONSE_TYPE,
+  TRACE_PILOT_MARKER,
 } from "../../type";
 import { Handler } from "../handler";
-
+import { writeClipboardViaContent } from "../pdf-module/pdf-handler";
 type ClickInfoExt = chrome.contextMenus.OnClickData & { tabId?: number };
 
 export class GoogleSheetsHandler extends Handler{
@@ -35,6 +34,56 @@ export class GoogleSheetsHandler extends Handler{
     }
   }
 
+  public async handleContentMessage(msg: {
+    url?: unknown;
+    repoPath?: unknown;
+    plainText?: unknown;
+    selectedArea?: unknown;
+    cellSnapshot?: unknown;
+  }, tabId: number | null){
+    if(typeof msg.url !== "string" || !msg.url){
+      return { ok: false, error: "url is required" };
+    }
+
+    if(typeof msg.repoPath !== "string" || !msg.repoPath){
+      return { ok: false, error: "repoPath is required" };
+    }
+
+    if(typeof msg.plainText !== "string"){
+      return { ok: false, error: "plainText must be a string" };
+    }
+
+    if(tabId == null || tabId < 0){
+      return { ok: false, error: "tabId is required" };
+    }
+
+    const plainText=msg.plainText;
+
+    const nativeMessage: MessageToNativeHost = {
+      type: RESPONSE_TYPE.GOOGLE_SHEETS,
+      data: {
+        selectedArea: msg.selectedArea as any,
+        cellSnapshot: msg.cellSnapshot as any,
+      },
+      url: msg.url,
+      plain_text: plainText,
+      repoPath: msg.repoPath,
+    };
+
+    console.log("message to native message: ",nativeMessage);
+
+    try{
+      const response = await this.sendToNativeHost(nativeMessage);
+      const metaHash = response.metaHash;
+      const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
+      const clipboardText = `${marker}\n${plainText}`;
+      await writeClipboardViaContent(tabId, clipboardText);
+      return { ok: true, response };
+    }catch(error){
+      return { ok: false, error: String(error) };
+    }
+  }
+
   private async getValidTabId(
     info: chrome.contextMenus.OnClickData,
     tab: chrome.tabs.Tab
@@ -54,7 +103,7 @@ export class GoogleSheetsHandler extends Handler{
     return null;
   }
 
-  private async handleRepoClick(
+  public async handleRepoClick(
     info: chrome.contextMenus.OnClickData,
     tab: chrome.tabs.Tab,
     repoPath: string

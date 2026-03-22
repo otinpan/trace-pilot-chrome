@@ -1,3 +1,7 @@
+import { StringValidation } from "zod/v3";
+import { writeClipboardViaContent } from "../../background/pdf-module/pdf-handler";
+import { RESPONSE_TYPE } from "../../type";
+
 export interface ThreadSelectors{
   container: string;
 }
@@ -29,11 +33,25 @@ interface GridShape{
   rows: string[][];
 }
 
+export interface SelectedArea{
+  startA1: string;
+  rowCount: number;
+  colCount: number;
+}
+
+export interface CellSnapshot{
+  name: string;
+  rows: string[][];
+  rowCount: number;
+  colCount: number;
+}
+
 export class GoogleSheetsThread{
   private observer: MutationObserver | null = null;
   private menuEl: HTMLElement | null = null;
   private latestPosition: MenuPosition | null = null;
   private latestStartA1: string | null = null;
+  private latestSheetName: string | null = null;
   private repos: string[] = [];
   private selectedRepo: string | null = null;
   private selectedClipboard: ClipboardCaptureResult | null = null; // cellの内容
@@ -98,6 +116,7 @@ export class GoogleSheetsThread{
     this.observer.observe(targetNode,{childList:true,subtree:true});
   }
 
+  // mouse右クリックで呼ばれる
   private handleContextMenu = (event: MouseEvent) => {
     const isSpreadSheetsPage=this.isGoogleSheetsPage();
     console.log("is google spread sheets: ",isSpreadSheetsPage);
@@ -110,8 +129,10 @@ export class GoogleSheetsThread{
       return;
     }
     this.latestStartA1 = this.findActiveCellA1();
+    this.latestSheetName = this.findActiveSheetName();
     console.log("success: find active selection: ",anchor);
     console.log("active cell A1 on context menu: ", this.latestStartA1);
+    console.log("active sheet name on context menu: ", this.latestSheetName);
 
     this.latestPosition = {
       x: event.clientX,
@@ -409,6 +430,63 @@ export class GoogleSheetsThread{
     console.log("trace-pilot google sheets selected cells:", this.selectedCells);
     console.log("trace-pilot google sheets all cells clipboard:", this.allCellsClipboard);
     console.log("trace-pilot google sheets all cells:", this.allCells);
+
+    if(!this.selectedCells?.ok){
+      console.warn("trace-pilot google sheets: selected cells are not available", this.selectedCells);
+      return;
+    }
+
+    if(!this.allCells?.ok){
+      console.warn("trace-pilot google sheets: whole-sheet cells are not available", this.allCells);
+      return;
+    }
+
+    const selectedCells = this.selectedCells as {
+      ok: true;
+      startA1: string;
+      rowCount: number;
+      colCount: number;
+    };
+    const allCells = this.allCells as {
+      ok: true;
+      rows: string[][];
+      rowCount: number;
+      colCount: number;
+    };
+
+    // backgroundに送信
+    const selectedArea:SelectedArea = {
+      startA1: selectedCells.startA1,
+      rowCount: selectedCells.rowCount,
+      colCount: selectedCells.colCount,
+    };
+
+    const cellSnapshot:CellSnapshot = {
+      name: this.latestSheetName ?? "",
+      rows: allCells.rows,
+      rowCount: allCells.rowCount,
+      colCount: allCells.colCount,
+    };
+
+    const payload = {
+      kind: "GOOGLE_SHEETS_CELLDATAS",
+      type: RESPONSE_TYPE.GOOGLE_SHEETS,
+      url: window.location.href,
+      repoPath: repo,
+      plainText: this.selectedClipboard?.textPlain ?? "",
+      selectedArea,
+      cellSnapshot,
+    };
+
+    let result: any;
+    try{
+      result = await chrome.runtime.sendMessage(payload);
+    }catch(e){
+      console.warn("GOOGLE_SHEETS_CELLDATAS send failed:", e);
+      return;
+    }
+
+    console.log("trace-pilot google sheets background response:", result);
   }
 
   private async selectWholeSheet(): Promise<boolean>{
@@ -545,6 +623,7 @@ export class GoogleSheetsThread{
   }
 
   private async sendSelectAllShortcut(): Promise<void> {
+    // OS依存解消
     const useMeta = this.isApplePlatform();
     const eventInit = {
       key: "a",
@@ -864,6 +943,42 @@ export class GoogleSheetsThread{
         return parsed;
       }
     
+    }
+
+    return null;
+  }
+
+  private findActiveSheetName(): string | null{
+    const activeTabSelectors = [
+      '[role="tab"][aria-selected="true"] .docs-sheet-tab-name',
+      '[aria-selected="true"] .docs-sheet-tab-name',
+      '.docs-sheet-tab[aria-selected="true"] .docs-sheet-tab-name',
+      '.docs-sheet-tab.docs-sheet-active-tab .docs-sheet-tab-name',
+      '.docs-sheet-active-tab .docs-sheet-tab-name',
+    ];
+
+    for(const selector of activeTabSelectors){
+      const el = document.querySelector(selector);
+      if(el instanceof HTMLElement){
+        const name = el.textContent?.trim();
+        if(name){
+          return name;
+        }
+      }
+    }
+
+    const visibleNames = Array.from(document.querySelectorAll(".docs-sheet-tab-name"))
+      .filter((el): el is HTMLElement => el instanceof HTMLElement)
+      .filter((el) => {
+        const tab = el.closest('[role="tab"], .docs-sheet-tab') as HTMLElement | null;
+        return tab ? this.isVisible(tab) : this.isVisible(el);
+      });
+
+    for(const el of visibleNames){
+      const name = el.textContent?.trim();
+      if(name){
+        return name;
+      }
     }
 
     return null;

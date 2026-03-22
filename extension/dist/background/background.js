@@ -646,6 +646,7 @@ var init_google_sheets_handler = __esm({
     "use strict";
     init_type();
     init_handler();
+    init_pdf_handler();
     GoogleSheetsHandler = class extends Handler {
       constructor() {
         super(MENU_ID_GOOGLE_SHEETS);
@@ -665,6 +666,43 @@ var init_google_sheets_handler = __esm({
           });
         } else {
           this.setEnabled(false);
+        }
+      }
+      async handleContentMessage(msg, tabId) {
+        if (typeof msg.url !== "string" || !msg.url) {
+          return { ok: false, error: "url is required" };
+        }
+        if (typeof msg.repoPath !== "string" || !msg.repoPath) {
+          return { ok: false, error: "repoPath is required" };
+        }
+        if (typeof msg.plainText !== "string") {
+          return { ok: false, error: "plainText must be a string" };
+        }
+        if (tabId == null || tabId < 0) {
+          return { ok: false, error: "tabId is required" };
+        }
+        const plainText = msg.plainText;
+        const nativeMessage = {
+          type: "GOOGLE_SHEETS" /* GOOGLE_SHEETS */,
+          data: {
+            selectedArea: msg.selectedArea,
+            cellSnapshot: msg.cellSnapshot
+          },
+          url: msg.url,
+          plain_text: plainText,
+          repoPath: msg.repoPath
+        };
+        console.log("message to native message: ", nativeMessage);
+        try {
+          const response = await this.sendToNativeHost(nativeMessage);
+          const metaHash = response.metaHash;
+          const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
+          const clipboardText = `${marker}
+${plainText}`;
+          await writeClipboardViaContent(tabId, clipboardText);
+          return { ok: true, response };
+        } catch (error) {
+          return { ok: false, error: String(error) };
         }
       }
       async getValidTabId(info, tab) {
@@ -856,6 +894,16 @@ var require_background = __commonJS({
         sendResponse({ ok: true, from: "background" });
         console.log("first message is sccessed!");
         return;
+      }
+      if (msg && typeof msg === "object" && msg.kind === "GOOGLE_SHEETS_CELLDATAS") {
+        (async () => {
+          const response = await googleSheetsHandler.handleContentMessage(
+            msg,
+            sender.tab?.id ?? null
+          );
+          sendResponse(response);
+        })();
+        return true;
       }
     });
   }
