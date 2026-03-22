@@ -718,6 +718,90 @@
           console.log("trace-pilot google sheets all cells:", this.allCells);
         }
         async selectWholeSheet() {
+          const beforeA1 = this.findActiveCellA1();
+          const triedShortcut = await this.selectWholeSheetByShortcut();
+          if (triedShortcut) {
+            const verified = await this.verifyWholeSheetSelection();
+            if (verified.ok) {
+              this.latestStartA1 = "A1";
+              console.log("trace-pilot google sheets: whole-sheet shortcut selection verified", verified);
+              return true;
+            }
+            console.warn("trace-pilot google sheets: whole-sheet shortcut selection was not verified", verified);
+          } else {
+            console.warn("trace-pilot google sheets: failed to trigger whole-sheet shortcut selection");
+          }
+          const triedCorner = await this.selectWholeSheetByCornerClick();
+          if (triedCorner) {
+            const verified = await this.verifyWholeSheetSelection();
+            if (verified.ok) {
+              this.latestStartA1 = "A1";
+              console.log("trace-pilot google sheets: whole-sheet corner selection verified", verified);
+              return true;
+            }
+            console.warn("trace-pilot google sheets: whole-sheet corner selection was not verified", verified);
+          } else {
+            console.warn("trace-pilot google sheets: failed to trigger whole-sheet corner selection");
+          }
+          this.latestStartA1 = beforeA1 ?? null;
+          return false;
+        }
+        async verifyWholeSheetSelection() {
+          const a1 = this.findActiveCellA1();
+          if (a1 && a1 !== "A1") {
+            return {
+              ok: false,
+              reason: "active range does not start at A1",
+              details: { a1 }
+            };
+          }
+          const probe = await this.captureSelectionClipboard();
+          if (!probe.ok || !probe.textPlain) {
+            return {
+              ok: false,
+              reason: "clipboard probe failed",
+              details: probe
+            };
+          }
+          const grid = this.parseClipboardGrid(probe.textPlain);
+          if (grid.rowCount <= 1 || grid.colCount <= 1) {
+            return {
+              ok: false,
+              reason: "clipboard probe looks too small for whole-sheet selection",
+              details: {
+                rowCount: grid.rowCount,
+                colCount: grid.colCount,
+                textPlain: probe.textPlain
+              }
+            };
+          }
+          if (probe.textHtml && !/<table[\s>]/i.test(probe.textHtml)) {
+            return {
+              ok: false,
+              reason: "clipboard html does not look like a table",
+              details: {
+                textHtml: probe.textHtml.slice(0, 200)
+              }
+            };
+          }
+          return {
+            ok: true,
+            reason: "clipboard probe produced table-like multi-cell data"
+          };
+        }
+        async selectWholeSheetByShortcut() {
+          const focused = this.focusGoogleSheetSurface();
+          if (!focused) {
+            console.warn("trace-pilot google sheets: could not focus sheet surface");
+            return false;
+          }
+          await this.sendSelectAllShortcut();
+          await this.sleep(200);
+          await this.sendSelectAllShortcut();
+          await this.sleep(350);
+          return true;
+        }
+        async selectWholeSheetByCornerClick() {
           const target = this.findWholeSheetSelectTarget();
           if (!target) {
             return false;
@@ -737,7 +821,51 @@
             );
           }
           await this.sleep(120);
-          this.latestStartA1 = "A1";
+          return true;
+        }
+        async sendSelectAllShortcut() {
+          const useMeta = this.isApplePlatform();
+          const eventInit = {
+            key: "a",
+            code: "KeyA",
+            keyCode: 65,
+            which: 65,
+            ctrlKey: !useMeta,
+            metaKey: useMeta,
+            bubbles: true,
+            cancelable: true
+          };
+          const target = document.activeElement ?? document.body;
+          target.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+          target.dispatchEvent(new KeyboardEvent("keypress", eventInit));
+          target.dispatchEvent(new KeyboardEvent("keyup", eventInit));
+        }
+        isApplePlatform() {
+          return /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+        }
+        focusGoogleSheetSurface() {
+          const candidates = [
+            document.querySelector(".grid-container"),
+            document.querySelector("[role='grid']"),
+            document.querySelector(".waffle-grid-container")
+          ].filter((el) => !!el);
+          const target = candidates.find((el) => this.isVisible(el));
+          if (!target) return false;
+          target.focus?.();
+          const rect = target.getBoundingClientRect();
+          const clientX = rect.left + Math.min(20, Math.max(5, rect.width / 4));
+          const clientY = rect.top + Math.min(20, Math.max(5, rect.height / 4));
+          for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+            target.dispatchEvent(
+              new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                clientX,
+                clientY,
+                button: 0
+              })
+            );
+          }
           return true;
         }
         findWholeSheetSelectTarget() {
