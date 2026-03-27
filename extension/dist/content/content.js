@@ -24,6 +24,7 @@
         constructor(id, title) {
           this.id = id;
           this.title = title;
+          this.turnSelector = '[data-testid^="conversation-turn-"]';
           this.observer = null;
           // 新しいメッセージが追加されたか
           this.threadItems = /* @__PURE__ */ new Map();
@@ -59,7 +60,7 @@
               for (const node of addedNodes) {
                 const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
                 if (!el) continue;
-                const turn = el.closest('article[data-testid^="conversation-turn-"]');
+                const turn = this.getClosestTurn(el);
                 if (!turn) {
                   console.log("el.closest(article)=null, el HTML:");
                   continue;
@@ -99,9 +100,19 @@
         // 画面上の一番最初の会話ターンを取得し、その親を返す
         getThreadContainer() {
           const firstTurn = document.querySelector(
-            'article[data-testid^="conversation-turn-"]'
+            this.turnSelector
           );
           return firstTurn?.parentElement ?? null;
+        }
+        getClosestTurn(el) {
+          return el?.closest(this.turnSelector);
+        }
+        getTurnMessageNode(turn, role) {
+          return turn.querySelector(`[data-message-author-role="${role}"]`);
+        }
+        getTurnParentId(turn, role = "assistant") {
+          const messageNode = this.getTurnMessageNode(turn, role);
+          return messageNode?.getAttribute("data-message-id") ?? turn.getAttribute("data-message-id") ?? turn.getAttribute("data-testid") ?? "";
         }
         // ユーザの操作からparentIdを推測する
         initListener() {
@@ -251,7 +262,7 @@
               time: this.tempPair?.time || (/* @__PURE__ */ new Date()).getTime(),
               codeBlocks: codeBlocks || []
             };
-            const key = this.assistantTurnRef?.getAttribute("data-message-id") ?? this.assistantTurnRef?.getAttribute("data-testid") ?? this.tempPair?.id ?? `${Date.now()}`;
+            const key = (this.assistantTurnRef ? this.getTurnParentId(this.assistantTurnRef, "assistant") : "") || this.assistantTurnRef?.getAttribute("data-testid") || this.tempPair?.id || `${Date.now()}`;
             this.threadItems.set(key, this.tempPair);
             console.log("threadItems after response:", this.threadItems);
             this.reset();
@@ -281,7 +292,7 @@
         }
         initThreadItems(container) {
           const turns = Array.from(
-            container.querySelectorAll('article[data-testid^="conversation-turn-"]')
+            container.querySelectorAll(this.turnSelector)
           );
           for (let i = 0; i < turns.length; i++) {
             const a = turns[i];
@@ -301,7 +312,7 @@
             const codeBlocks = Array.from(preNodes).map((pre) => {
               return this.makeCodeBlock(pre, id);
             });
-            const key = b.getAttribute("data-message-id") ?? b.getAttribute("data-testid") ?? id;
+            const key = this.getTurnParentId(b, "assistant") || b.getAttribute("data-testid") || id;
             this.threadItems.set(key, {
               id,
               time: Date.now(),
@@ -323,7 +334,11 @@
           const surroundingText = codeRef?.innerText || "";
           const langClass = codeNode?.className ?? "";
           const language = langClass.replace("language-", "");
-          const turnParentId = preNode.closest('article[data-testid^="conversation-turn-"]')?.getAttribute("data-message-id") ?? preNode.closest('article[data-testid^="conversation-turn-"]')?.getAttribute("data-testid") ?? "";
+          const turnParentId = (() => {
+            const turn = this.getClosestTurn(preNode);
+            if (!turn) return "";
+            return this.getTurnParentId(turn, "assistant");
+          })();
           const codeBlock = {
             code,
             codeRef: preNode,
@@ -339,13 +354,13 @@
         resolveParentFromNode(node) {
           const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement ?? null;
           if (!el) return null;
-          let turn = el.closest('article[data-testid^="conversation-turn-"]');
+          let turn = this.getClosestTurn(el);
           if (!turn) return null;
           if (turn.getAttribute("data-turn") === "user") {
             const assistant = this.findNextAssistantTurn(turn);
             if (assistant) turn = assistant;
           }
-          const parentId = turn.getAttribute("data-message-id") ?? turn.getAttribute("data-testid") ?? "";
+          const parentId = this.getTurnParentId(turn, "assistant") || turn.getAttribute("data-testid") || "";
           if (!parentId) return null;
           return { parentId, turn };
         }
@@ -1399,15 +1414,54 @@
         }
         throw lastErr;
       }
+      function writeClipboardWithExecCommand(text) {
+        const active = document.activeElement;
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.top = "0";
+        textarea.style.left = "0";
+        textarea.style.opacity = "0";
+        textarea.style.pointerEvents = "none";
+        textarea.style.zIndex = "-1";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        const ok = document.execCommand("copy");
+        textarea.remove();
+        if (active?.focus) {
+          active.focus();
+        }
+        if (!ok) {
+          throw new Error("execCommand copy failed");
+        }
+      }
       chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         if (msg?.kind !== "TRACE_PILOT_WRITE_CLIPBOARD") return;
         (async () => {
           const ready = await waitForReady(1500);
           try {
             await writeClipboardWithRetry(msg.text, 8);
-            sendResponse({ ok: true, ready });
+            sendResponse({ ok: true, ready, method: "clipboard-api" });
           } catch (e) {
-            sendResponse({ ok: false, error: String(e?.message ?? e), ready });
+            try {
+              writeClipboardWithExecCommand(msg.text);
+              sendResponse({
+                ok: true,
+                ready,
+                method: "execCommand",
+                clipboardApiError: String(e?.message ?? e)
+              });
+            } catch (fallbackError) {
+              sendResponse({
+                ok: false,
+                error: String(fallbackError?.message ?? fallbackError),
+                ready,
+                clipboardApiError: String(e?.message ?? e)
+              });
+            }
           }
         })();
         return true;

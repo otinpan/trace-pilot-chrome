@@ -33,6 +33,7 @@ interface LastTarget{
 
 
 export class GPTThread{
+    private readonly turnSelector='[data-testid^="conversation-turn-"]';
     private observer: MutationObserver |null=null; // 新しいメッセージが追加されたか
     private threadItems= new Map<string,ThreadPair> () // スレッド内の履歴データ
     private assistantTurnRef: HTMLElement|null=null;
@@ -56,10 +57,28 @@ export class GPTThread{
     // 画面上の一番最初の会話ターンを取得し、その親を返す
     private getThreadContainer(): HTMLElement|null{
         const firstTurn=document.querySelector(
-            'article[data-testid^="conversation-turn-"]'
+            this.turnSelector
         ) as HTMLElement | null;
 
         return (firstTurn?.parentElement ?? null) as HTMLElement | null;
+    }
+
+    private getClosestTurn(el: Element | null): HTMLElement | null{
+        return el?.closest(this.turnSelector) as HTMLElement | null;
+    }
+
+    private getTurnMessageNode(turn: HTMLElement, role: "assistant" | "user"): HTMLElement | null{
+        return turn.querySelector(`[data-message-author-role="${role}"]`) as HTMLElement | null;
+    }
+
+    private getTurnParentId(turn: HTMLElement, role: "assistant" | "user" = "assistant"): string{
+        const messageNode=this.getTurnMessageNode(turn,role);
+        return (
+            messageNode?.getAttribute("data-message-id")
+            ?? turn.getAttribute("data-message-id")
+            ?? turn.getAttribute("data-testid")
+            ?? ""
+        );
     }
 
     // ユーザの操作からparentIdを推測する
@@ -246,7 +265,7 @@ export class GPTThread{
                     if(!el)continue;
 
                 // 会話ターンを特定
-                const turn = el.closest('article[data-testid^="conversation-turn-"]') as HTMLElement | null;
+                const turn = this.getClosestTurn(el);
 
                 // ない場合は無視
                 if(!turn){
@@ -347,10 +366,12 @@ export class GPTThread{
 
             // bot側からparentIdを取得
             const key=
-                this.assistantTurnRef?.getAttribute("data-message-id")
-                ?? this.assistantTurnRef?.getAttribute("data-testid")
-                ?? this.tempPair?.id
-                ?? `${Date.now()}`;
+                (this.assistantTurnRef
+                    ? this.getTurnParentId(this.assistantTurnRef,"assistant")
+                    : "")
+                || this.assistantTurnRef?.getAttribute("data-testid")
+                || this.tempPair?.id
+                || `${Date.now()}`;
 
             this.threadItems.set(key,this.tempPair!);
             console.log("threadItems after response:",this.threadItems);
@@ -394,7 +415,7 @@ export class GPTThread{
 
     private initThreadItems(container: HTMLElement){
         const turns=Array.from(
-            container.querySelectorAll('article[data-testid^="conversation-turn-"]')
+            container.querySelectorAll(this.turnSelector)
         ) as HTMLElement[];
 
         for(let i=0;i<turns.length;i++){
@@ -421,9 +442,9 @@ export class GPTThread{
             });
 
             // responseからparentIdを取得
-            const key=b.getAttribute("data-message-id")
-                ?? b.getAttribute("data-testid")
-                ?? id;
+            const key=this.getTurnParentId(b,"assistant")
+                || b.getAttribute("data-testid")
+                || id;
 
             this.threadItems.set(key,{
                 id,
@@ -453,11 +474,11 @@ export class GPTThread{
         const language=langClass.replace('language-','');
         
         const turnParentId =
-            preNode.closest('article[data-testid^="conversation-turn-"]')
-                ?.getAttribute("data-message-id")
-            ?? preNode.closest('article[data-testid^="conversation-turn-"]')
-                ?.getAttribute("data-testid")
-            ?? "";
+            (() => {
+                const turn=this.getClosestTurn(preNode);
+                if(!turn)return "";
+                return this.getTurnParentId(turn,"assistant");
+            })();
 
         const codeBlock:CodeBlock = {
             code,
@@ -484,7 +505,7 @@ export class GPTThread{
         if(!el)return null;
 
         // nodeを包む一番近いelement
-        let turn = el.closest('article[data-testid^="conversation-turn-"]') as HTMLElement | null;
+        let turn = this.getClosestTurn(el);
         if(!turn)return null;
 
         if(turn.getAttribute("data-turn")==="user"){
@@ -493,8 +514,8 @@ export class GPTThread{
         }
 
         const parentId=
-            turn.getAttribute("data-message-id")??
-            turn.getAttribute("data-testid")??
+            this.getTurnParentId(turn,"assistant")||
+            turn.getAttribute("data-testid")||
             "";
         
         if(!parentId)return null;
@@ -503,4 +524,3 @@ export class GPTThread{
     }    
 
 }
-

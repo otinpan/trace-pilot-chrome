@@ -79,8 +79,6 @@ var init_generic_listener = __esm({
             command = "googleOpen" /* GOOGLE_OPEN */;
           } else if (url.startsWith("https://stackoverflow.com")) {
             command = "stackoverflowOpen" /* STACKOVERFLOW_OPEN */;
-          } else if (url.startsWith("https://github.com")) {
-            command = "githubOpen" /* GITHUB_OPEN */;
           } else if (url.includes("google.com/spreadsheets")) {
             command = "googleSheetsOpen" /* GOOGLE_SHEETS_OPEN */;
           }

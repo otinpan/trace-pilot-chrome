@@ -101,6 +101,36 @@ async function writeClipboardWithRetry(text: string, tries = 6) {
   throw lastErr;
 }
 
+function writeClipboardWithExecCommand(text: string): void {
+  const active = document.activeElement as HTMLElement | null;
+  const textarea = document.createElement("textarea");
+
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "0";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  textarea.style.zIndex = "-1";
+
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  const ok = document.execCommand("copy");
+  textarea.remove();
+
+  if (active?.focus) {
+    active.focus();
+  }
+
+  if (!ok) {
+    throw new Error("execCommand copy failed");
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.kind !== "TRACE_PILOT_WRITE_CLIPBOARD") return;
 
@@ -108,9 +138,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     const ready = await waitForReady(1500);
     try {
       await writeClipboardWithRetry(msg.text, 8);
-      sendResponse({ ok: true, ready });
+      sendResponse({ ok: true, ready, method: "clipboard-api" });
     } catch (e: any) {
-      sendResponse({ ok: false, error: String(e?.message ?? e), ready });
+      try {
+        writeClipboardWithExecCommand(msg.text);
+        sendResponse({
+          ok: true,
+          ready,
+          method: "execCommand",
+          clipboardApiError: String(e?.message ?? e),
+        });
+      } catch (fallbackError: any) {
+        sendResponse({
+          ok: false,
+          error: String(fallbackError?.message ?? fallbackError),
+          ready,
+          clipboardApiError: String(e?.message ?? e),
+        });
+      }
     }
   })();
 

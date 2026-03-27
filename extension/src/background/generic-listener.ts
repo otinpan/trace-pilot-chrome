@@ -49,9 +49,9 @@ export class GenericListener{
                 command = COMMANDS.GOOGLE_OPEN;
             } else if (url.startsWith("https://stackoverflow.com")) {
                 command = COMMANDS.STACKOVERFLOW_OPEN;
-            } else if (url.startsWith("https://github.com")) {
+            } /*else if (url.startsWith("https://github.com")) {
                 command = COMMANDS.GITHUB_OPEN;
-            } else if(url.includes("google.com/spreadsheets")){
+            } */else if(url.includes("google.com/spreadsheets")){
               command=COMMANDS.GOOGLE_SHEETS_OPEN;
             }
 
