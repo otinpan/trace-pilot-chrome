@@ -1,5 +1,3 @@
-import { StringValidation } from "zod/v3";
-import { writeClipboardViaContent } from "../../background/pdf-module/pdf-handler";
 import { RESPONSE_TYPE } from "../../type";
 
 export interface ThreadSelectors{
@@ -418,12 +416,15 @@ export class GoogleSheetsThread{
     this.selectedCells = this.resolveSelectedCells(this.selectedClipboard);
     this.allCellsClipboard = null;
     this.allCells = null;
+    const selectedTextPlain = this.selectedClipboard?.textPlain ?? "";
 
     const selectedWholeSheet = await this.selectWholeSheet();
     if(selectedWholeSheet){
       this.allCellsClipboard = await this.captureSelectionClipboard();
       this.allCells = this.resolveSelectedCells(this.allCellsClipboard);
     }
+
+    await this.restoreClipboardText(selectedTextPlain);
 
     console.log("trace-pilot google sheets selected repo:", this.selectedRepo);
     console.log("trace-pilot google sheets clipboard capture:", this.selectedClipboard);
@@ -729,6 +730,44 @@ export class GoogleSheetsThread{
         execResult.error ??
         "clipboard capture failed",
     };
+  }
+
+  // 一度普通にtextをクリップボードに書き込む
+  // 失敗したら、textareaを作成して文字列を入れて選択しクリップボードに書き込む
+  private async restoreClipboardText(text: string): Promise<void>{
+    try{
+      await navigator.clipboard.writeText(text);
+      return;
+    }catch(error){
+      console.warn("trace-pilot google sheets: navigator.clipboard.writeText failed", error);
+    }
+
+    const activeEl = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.top = "0";
+    textarea.style.left = "0";
+    textarea.style.width = "1px";
+    textarea.style.height = "1px";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try{
+      document.execCommand("copy");
+    }catch(error){
+      console.warn("trace-pilot google sheets: clipboard restore fallback failed", error);
+    }finally{
+      textarea.remove();
+      activeEl?.focus();
+    }
   }
 
   private captureClipboardByCopyEvent(): Promise<ClipboardCaptureResult>{

@@ -329,11 +329,14 @@
         makeCodeBlock(preNode, parentId) {
           console.log("preNode", preNode, "preNode.innerText", preNode.innerText);
           const codeNode = preNode.querySelector("code");
-          const code = codeNode?.innerText ?? "";
+          const cmContent = preNode.querySelector(".cm-content");
+          const rawCode = codeNode?.innerText ?? cmContent?.innerText ?? preNode.innerText ?? "";
+          const code = rawCode.trim();
           const codeRef = preNode;
           const surroundingText = codeRef?.innerText || "";
+          const langLabel = preNode.querySelector(".sticky .text-sm.font-medium")?.innerText?.trim() ?? "";
           const langClass = codeNode?.className ?? "";
-          const language = langClass.replace("language-", "");
+          const language = langClass.split(/\s+/).find((cls) => cls.startsWith("language-"))?.replace("language-", "") || langLabel;
           const turnParentId = (() => {
             const turn = this.getClosestTurn(preNode);
             if (!turn) return "";
@@ -733,11 +736,13 @@
           this.selectedCells = this.resolveSelectedCells(this.selectedClipboard);
           this.allCellsClipboard = null;
           this.allCells = null;
+          const selectedTextPlain = this.selectedClipboard?.textPlain ?? "";
           const selectedWholeSheet = await this.selectWholeSheet();
           if (selectedWholeSheet) {
             this.allCellsClipboard = await this.captureSelectionClipboard();
             this.allCells = this.resolveSelectedCells(this.allCellsClipboard);
           }
+          await this.restoreClipboardText(selectedTextPlain);
           console.log("trace-pilot google sheets selected repo:", this.selectedRepo);
           console.log("trace-pilot google sheets clipboard capture:", this.selectedClipboard);
           console.log("trace-pilot google sheets selected cells:", this.selectedCells);
@@ -968,6 +973,36 @@
             types: [],
             error: navigatorResult.error ?? execResult.error ?? "clipboard capture failed"
           };
+        }
+        async restoreClipboardText(text) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return;
+          } catch (error) {
+            console.warn("trace-pilot google sheets: navigator.clipboard.writeText failed", error);
+          }
+          const activeEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.setAttribute("readonly", "true");
+          textarea.style.position = "fixed";
+          textarea.style.top = "0";
+          textarea.style.left = "0";
+          textarea.style.width = "1px";
+          textarea.style.height = "1px";
+          textarea.style.opacity = "0";
+          textarea.style.pointerEvents = "none";
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          try {
+            document.execCommand("copy");
+          } catch (error) {
+            console.warn("trace-pilot google sheets: clipboard restore fallback failed", error);
+          } finally {
+            textarea.remove();
+            activeEl?.focus();
+          }
         }
         captureClipboardByCopyEvent() {
           return new Promise((resolve) => {

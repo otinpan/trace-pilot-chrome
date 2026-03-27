@@ -462,16 +462,32 @@ export class GPTThread{
     }
 
     private makeCodeBlock(preNode: HTMLPreElement, parentId: string): CodeBlock {
-        // const codeNode = preNode?.querySelector('code');
         console.log('preNode', preNode, 'preNode.innerText', preNode.innerText);
         const codeNode=preNode.querySelector('code');
-        const code=codeNode?.innerText?? '';
+        const cmContent = preNode.querySelector<HTMLElement>('.cm-content');
+        const rawCode =
+            codeNode?.innerText
+            ?? cmContent?.innerText
+            ?? preNode.innerText
+            ?? '';
+        const code = rawCode.trim();
         const codeRef = preNode as HTMLElement;
 
         const surroundingText = codeRef?.innerText || '';
         
+        const langLabel =
+            preNode.querySelector<HTMLElement>('.sticky .text-sm.font-medium')
+            ?.innerText
+            ?.trim()
+            ?? '';
         const langClass=codeNode?.className ?? '';
-        const language=langClass.replace('language-','');
+        const language=
+            (langClass
+                .split(/\s+/)
+                .find((cls)=>cls.startsWith('language-'))
+                ?.replace('language-','')
+            )
+            || langLabel;
         
         const turnParentId =
             (() => {
