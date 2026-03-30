@@ -1,61 +1,111 @@
 # trace-pilot-chrome
 
-`trace-pilot-chrome` is a Chrome extension for preserving the provenance of copied text.
+`trace-pilot-chrome` is a Chrome extension that preserves the provenance of copied text.
 
-Status: Trace-Pilot is still under development and has not been publicly released yet.
+Trace-Pilot captures the text you copy from Chrome, stores the original source data in a Git-backed repository, and adds a trace marker to the clipboard. When the text is later pasted into VS Code, that marker can be resolved back to the original source so you can inspect where the content came from and recover its surrounding context.
 
-When you copy text from sources such as ChatGPT, Google Sheets, PDFs, or regular web pages, the extension saves both the selected text and its source data into a Git repository. It then generates a hash marker and places it on the clipboard together with the copied text. When that text is pasted into VS Code, the marker can be used to trace the pasted content back to its original source.
+This helps teams keep copied code and text explainable, auditable, and easier to maintain over time.
 
-This makes it easier to understand where copied code or text came from, why it was used, and how to inspect the original context later. The goal is to improve traceability and long-term maintainability.
+## Status
 
-The VS Code side of Trace-Pilot, which resolves these markers and shows the original source data, is available here:
+Trace-Pilot is still under development and has not been publicly released yet.
+
+## Platform
+
+This tool currently runs on Linux.
+
+## Related Project
+
+The VS Code side of Trace-Pilot, which resolves pasted markers and displays the original source data, is available here:
 
 https://github.com/otinpan/trace-pilot
 
 ## What This Repository Contains
 
-This repository contains the Chrome extension side of Trace-Pilot. It is responsible for:
+This repository contains the Chrome extension side of Trace-Pilot. Its responsibilities include:
 
 - Detecting supported pages in Chrome
-- Capturing selected text
+- Capturing selected text or selected cells
 - Collecting source data from the current page
 - Sending the captured data to the native host for Git storage
 - Writing a trace marker back to the clipboard
 
 ## Supported Sources
 
-The extension is designed to work with content copied from:
+The extension currently supports content copied from:
 
 - ChatGPT
 - Google Sheets
-- PDF pages
+- PDF pages opened in Chrome
 - Static web pages
 
 ## How It Works
 
-1. You select text in Chrome.
-2. You run the Trace-Pilot context menu action.
-3. The extension captures the selected text and the relevant source data.
-4. The data is stored in a Git-backed repository through the native host.
-5. A trace marker is generated and copied to the clipboard with the selected text.
-6. When pasted into VS Code, the pasted content can be linked back to its origin.
-
-## Usage
-Tihs tool is not released yet.
-At a high level, the workflow is:
-
 1. Open a supported page in Chrome.
-2. Select the text you want to preserve.
-3. Right-click and choose a Trace-Pilot menu item.
-4. Select the target repository.
-5. Paste the result into VS Code.
+2. Select the text or cells you want to preserve.
+3. Right-click and choose a Trace-Pilot context menu item.
+4. Select the target Git repository.
+5. The extension captures the selected content together with its source data.
+6. The data is stored through the native host in a Git-backed repository.
+7. A trace marker is added to the clipboard along with the copied text.
+8. When you paste the result into VS Code, the marker can be used to trace the content back to its origin.
+
+![](Assets/select_GitRepo.png)
+![](Assets/ClickLink.png)
 
 ## Why Use It
 
-Trace-Pilot helps when copied text or code would otherwise lose its source context. Instead of leaving behind undocumented snippets, it preserves:
+Copied text and code often lose their source context. Trace-Pilot helps preserve that context by storing:
 
 - Where the text came from
 - The original surrounding data
 - A stable reference that can be resolved later
 
-This is especially useful for research, note-taking, code generation workflows, and long-lived software projects.
+It is also more resilient to link rot because the source data is preserved in your own Git repository rather than relying only on external URLs.
+
+This is especially useful for:
+
+- Research workflows
+- Note-taking
+- AI-assisted writing and coding
+- Long-lived software projects
+
+## Usage
+
+Trace-Pilot has not been released yet, but the intended workflow is:
+
+1. Open a supported page in Chrome.
+2. Select the text or cells you want to preserve.
+3. Right-click and choose a Trace-Pilot menu item.
+4. Select the destination Git repository.
+5. Paste the result into VS Code and inspect the source later when needed.
+
+## Features by Source
+
+Trace-Pilot supports copying from multiple kinds of web content. After you open the context menu and choose a destination Git repository, the extension stores the source data and places a trace marker on the clipboard. When the content is pasted into VS Code, the marker can be used to recover the original source data.
+
+### PDF
+
+When you open the context menu on a PDF page in Chrome, Trace-Pilot shows PDF-specific menu items.
+
+![](Assets/Chrome_PDF.png)
+
+### ChatGPT
+
+When you open the context menu on a ChatGPT page in Chrome, Trace-Pilot shows ChatGPT-specific menu items. It stores both the prompt and the generated output as source data in Git.
+
+![](Assets/Chrome_ChatGPT.png)
+
+### Google Sheets
+
+When you select cells in Google Sheets and open the context menu, Trace-Pilot shows a dedicated menu item. After you click it, you can choose a Git repository. The selected cell values and the relevant sheet data are then stored as source data.
+
+![](Assets/select_some_cells.png)
+![](Assets/select_GitRepo_GoogleSpreadSheets.png)
+![](Assets/Chrome_GoogleSpreadSheet_somecells.png)
+
+### Static Web Pages
+
+On pages other than the specialized sources above, Trace-Pilot provides an option for static web pages. It stores the selected text together with relevant page elements as source data in Git.
+
+![](Assets/Chrome_StaticPage.png)
