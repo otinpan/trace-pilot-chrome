@@ -1,12 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "trace-pilot",
+  "name": "trace-pilot-chrome",
   "version": "1.0",
-  "description": "trace-pilot",
+  "description": "trace-pilot-chrome",
 
   "permissions": [
-    "storage",
-    "activeTab",
     "scripting",
     "contextMenus",
     "nativeMessaging",
@@ -22,7 +20,19 @@
   },
 
   "action":{
+    "default_icon": {
+      "16": "Assets/trace-pilot_icon2.png",
+      "32": "Assets/trace-pilot_icon2.png",
+      "48": "Assets/trace-pilot_icon2.png",
+      "128": "Assets/trace-pilot_icon2.png"
+    }
+  },
 
+  "icons": {
+    "16": "Assets/trace-pilot_icon2.png",
+    "32": "Assets/trace-pilot_icon2.png",
+    "48": "Assets/trace-pilot_icon2.png",
+    "128": "Assets/trace-pilot_icon2.png"
   },
 
 

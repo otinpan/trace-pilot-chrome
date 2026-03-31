@@ -1,0 +1,153 @@
+import { MENU_ID_GPT, COMMANDS, TRACE_PILOT_MARKER, RESPONSE_TYPE, } from "../../type";
+import { Handler } from "../handler";
+import { writeClipboardViaContent } from "../pdf-module/pdf-handler";
+export class GPTHandler extends Handler {
+    constructor() {
+        super(MENU_ID_GPT);
+        this.threads = new Map();
+        this.activeThread = null;
+        this.lastPlainText = "";
+    }
+    onGenericEvent(ev) {
+        if (ev.command === COMMANDS.GPT_OPEN && ev.url && ev.title) {
+            console.log("gpt");
+            if (!ev.url)
+                return;
+            if (!ev.title)
+                return;
+            this.setEnabled(true);
+            // gpt専用スレッドの作成
+            chrome.tabs.sendMessage(ev.tabId, {
+                kind: "GPT_START_OBSERVE",
+                url: ev.url,
+                title: ev.title,
+            }).catch(() => {
+            });
+            return;
+        }
+        else {
+            this.setEnabled(false);
+        }
+    }
+    async getValidTabId(info, tab) {
+        const i = info;
+        const cands = [
+            i.tabId,
+            tab.id,
+        ].filter((x) => typeof x === "number");
+        const ok = cands.find((id) => id >= 0);
+        if (ok != null)
+            return ok;
+        const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (active?.id != null && active.id >= 0)
+            return active.id;
+        return null;
+    }
+    async handleRepoClick(info, tab, repoPath) {
+        await this.onMenuClick(info, tab, repoPath);
+    }
+    async onMenuClick(info, tab, repoPath) {
+        const tabId = await this.getValidTabId(info, tab);
+        if (tabId == null || tabId < 0) {
+            console.error("no valide tabId", tabId);
+            return;
+        }
+        const rawUrl = tab.url || "";
+        if (tabId == null)
+            return;
+        if (!rawUrl) {
+            return;
+        }
+        // イベントが発火したことを通知 → parentIdの取得
+        let resolved;
+        try {
+            resolved = await chrome.tabs.sendMessage(tabId, {
+                kind: "RESOLVE_LAST_TARGET",
+            }).catch(() => null);
+        }
+        catch (e) {
+            console.warn("sendMessage RESOLVE_LAST_TARGET failed:", e);
+            return;
+        }
+        if (!resolved?.ok) {
+            console.warn("No target:", resolved?.reason);
+            return;
+        }
+        // parentIdを渡す → threadPairを取得
+        let result;
+        try {
+            result = await chrome.tabs.sendMessage(tabId, {
+                kind: "FORCE_RESPONSE_THREADPAIR",
+                parentId: resolved.parentId,
+                preIndex: resolved.preIndex,
+            });
+        }
+        catch (e) {
+            console.warn("sendMessage FORCE_RESPONSE_THREADPAIR failed:", e);
+            return;
+        }
+        if (!result) {
+            console.warn("FORCE_RESPONSE_THREADPAIR returned empty:", result);
+            return;
+        }
+        console.log("succsess: clickmenu");
+        console.log(resolved.parentId);
+        console.log("result", result);
+        // 改行を含めて保存
+        const plainText = await getSelectionFromAnyFrame(tabId);
+        if (!plainText.trim()) {
+            console.warn("selection is empty");
+            return;
+        }
+        if (plainText === undefined) {
+            return;
+        }
+        this.lastPlainText = plainText;
+        const threadPair = result.result;
+        // codeBlockを文字列に直す
+        const sanitized = {
+            ...threadPair,
+            codeBlocks: threadPair.codeBlocks.map((cb) => {
+                const { codeRef, ...rest } = cb;
+                return rest;
+            }),
+        };
+        const msg = {
+            type: RESPONSE_TYPE.CHAT_GPT,
+            data: { thread_pair: sanitized },
+            url: rawUrl,
+            plain_text: plainText,
+            repoPath: repoPath
+        };
+        console.log("message to native host: ", msg);
+        let res = await this.sendToNativeHost(msg);
+        const metaHash = res.metaHash;
+        // クリップボードに貼る文字列
+        const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
+        const clipboardText = `${marker}\n${plainText}`;
+        await writeClipboardViaContent(tab.id, clipboardText);
+    }
+}
+export async function getSelectionFromAnyFrame(tabId) {
+    const results = await chrome.scripting.executeScript({
+        target: { tabId, allFrames: true },
+        func: () => {
+            const sel = window.getSelection?.();
+            return {
+                href: location.href,
+                focused: document.hasFocus(),
+                text: sel ? sel.toString() : "",
+            };
+        },
+    });
+    // 文字が取れたフレームを優先
+    const hit = results
+        .map(r => r.result)
+        .find(r => (r.text ?? "").trim().length > 0);
+    if (hit)
+        return hit.text;
+    // 取れなかった場合、デバッグ用にどのフレームが見えてたかログれる
+    console.warn("No selection text in any frame:", results.map(r => r.result));
+    return "";
+}
+export default GPTHandler;

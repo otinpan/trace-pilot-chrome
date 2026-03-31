@@ -974,6 +974,8 @@
             error: navigatorResult.error ?? execResult.error ?? "clipboard capture failed"
           };
         }
+        // 一度普通にtextをクリップボードに書き込む
+        // 失敗したら、textareaを作成して文字列を入れて選択しクリップボードに書き込む
         async restoreClipboardText(text) {
           try {
             await navigator.clipboard.writeText(text);

@@ -14,6 +14,28 @@ Trace-Pilot is still under development and has not been publicly released yet.
 
 This tool currently runs on Linux.
 
+## Install Native Host On Linux
+
+The Chrome extension talks to a local native messaging host named `trace_pilot_host_chrome`.
+
+If you publish a release archive such as `trace-pilot-host-linux-x86_64.tar.gz`, the Linux install flow can be:
+
+```bash
+wget https://github.com/otinpan/trace-pilot-chrome/releases/latest/download/trace-pilot-host-linux-x86_64.tar.gz
+tar xzf trace-pilot-host-linux-x86_64.tar.gz
+cd trace-pilot-host-linux-x86_64
+chmod +x install.sh
+EXTENSION_ID=<your-chrome-extension-id> ./install.sh
+```
+
+`install.sh` installs the native host binary into `~/.local/share/trace-pilot-host/` and writes the native messaging manifest to:
+
+```text
+~/.config/google-chrome/NativeMessagingHosts/trace_pilot_host_chrome.json
+```
+
+The extension ID is required because Chrome native messaging manifests must declare the allowed origin explicitly.
+
 ## Related Project
 
 The VS Code side of Trace-Pilot, which resolves pasted markers and displays the original source data, is available here:
