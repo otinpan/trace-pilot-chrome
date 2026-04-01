@@ -9,6 +9,7 @@ import {
     GPTData,
 } from "../../type";
 import { Handler } from "../handler";
+import { writeClipboardForPdf } from "../clipboard/offscreen-clipboard";
 
 
 type ClickInfoExt = chrome.contextMenus.OnClickData & { tabId?: number };
@@ -135,7 +136,7 @@ export class PdfHandler extends Handler {
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}\n${plainText}`;
 
-        await writeClipboardViaContent(tabId, clipboardText);
+        await writeClipboardForPdf(clipboardText);
     }
 }
 
@@ -224,4 +225,3 @@ export async function writeClipboardViaContent(tabId: number, text: string) {
         throw new Error(res?.error ?? "clipboard write failed");
     }
 }
-

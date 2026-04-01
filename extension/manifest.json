@@ -5,6 +5,8 @@
   "description": "trace-pilot-chrome",
 
   "permissions": [
+    "offscreen",
+    "clipboardWrite",
     "scripting",
     "contextMenus",
     "nativeMessaging",

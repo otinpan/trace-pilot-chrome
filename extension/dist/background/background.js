@@ -134,6 +134,65 @@ var init_handler = __esm({
   }
 });
 
+// background/clipboard/offscreen-clipboard.ts
+async function hasOffscreenDocument() {
+  const runtime = chrome.runtime;
+  if (typeof runtime.getContexts === "function") {
+    const contexts = await runtime.getContexts({
+      contextTypes: ["OFFSCREEN_DOCUMENT"],
+      documentUrls: [chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)]
+    });
+    return contexts.length > 0;
+  }
+  if (typeof clients === "undefined") {
+    return false;
+  }
+  const matchedClients = await clients.matchAll();
+  return matchedClients.some(
+    (client) => client.url === chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)
+  );
+}
+async function ensureOffscreenDocument() {
+  if (await hasOffscreenDocument()) {
+    return;
+  }
+  if (!creatingOffscreenDocument) {
+    creatingOffscreenDocument = (async () => {
+      const offscreen = chrome.offscreen;
+      if (!offscreen) {
+        throw new Error("chrome.offscreen is not available");
+      }
+      await offscreen.createDocument({
+        url: OFFSCREEN_DOCUMENT_PATH,
+        reasons: ["CLIPBOARD"],
+        justification: "Write clipboard text for PDF tabs"
+      });
+    })().finally(() => {
+      creatingOffscreenDocument = null;
+    });
+  }
+  await creatingOffscreenDocument;
+}
+async function writeClipboardForPdf(text) {
+  await ensureOffscreenDocument();
+  const response = await chrome.runtime.sendMessage({
+    kind: OFFSCREEN_WRITE_KIND,
+    text
+  });
+  if (!response?.ok) {
+    throw new Error(response?.error ?? "offscreen clipboard write failed");
+  }
+}
+var OFFSCREEN_DOCUMENT_PATH, OFFSCREEN_WRITE_KIND, creatingOffscreenDocument;
+var init_offscreen_clipboard = __esm({
+  "background/clipboard/offscreen-clipboard.ts"() {
+    "use strict";
+    OFFSCREEN_DOCUMENT_PATH = "dist/offscreen/offscreen.html";
+    OFFSCREEN_WRITE_KIND = "TRACE_PILOT_OFFSCREEN_WRITE_CLIPBOARD";
+    creatingOffscreenDocument = null;
+  }
+});
+
 // background/pdf-module/pdf-handler.ts
 function resolvePdfUrl(tabUrl) {
   let url = tabUrl;
@@ -195,6 +254,7 @@ var init_pdf_handler = __esm({
     "use strict";
     init_type();
     init_handler();
+    init_offscreen_clipboard();
     PdfHandler = class extends Handler {
       constructor() {
         super(MENU_ID_PDF);
@@ -269,7 +329,7 @@ var init_pdf_handler = __esm({
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}
 ${plainText}`;
-        await writeClipboardViaContent(tabId, clipboardText);
+        await writeClipboardForPdf(clipboardText);
       }
     };
   }
