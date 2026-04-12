@@ -1,3 +1,4 @@
+import { Result } from "../../type";
 const OFFSCREEN_DOCUMENT_PATH = "dist/offscreen/offscreen.html";
 const OFFSCREEN_WRITE_KIND = "TRACE_PILOT_OFFSCREEN_WRITE_CLIPBOARD";
 
@@ -23,6 +24,10 @@ type ChromeWithOffscreen = typeof chrome & {
   };
 };
 
+type ServiceWorkerClients = {
+  matchAll(): Promise<Array<{ url: string }>>;
+};
+
 let creatingOffscreenDocument: Promise<void> | null = null;
 
 async function hasOffscreenDocument(): Promise<boolean> {
@@ -36,11 +41,15 @@ async function hasOffscreenDocument(): Promise<boolean> {
     return contexts.length > 0;
   }
 
-  if (typeof clients === "undefined") {
+  const serviceWorkerClients = (globalThis as typeof globalThis & {
+    clients?: ServiceWorkerClients;
+  }).clients;
+
+  if (!serviceWorkerClients) {
     return false;
   }
 
-  const matchedClients = await clients.matchAll();
+  const matchedClients = await serviceWorkerClients.matchAll();
   return matchedClients.some(
     (client) => client.url === chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)
   );
@@ -71,7 +80,7 @@ async function ensureOffscreenDocument(): Promise<void> {
   await creatingOffscreenDocument;
 }
 
-export async function writeClipboardForPdf(text: string): Promise<void> {
+export async function writeClipboardForPdf(text: string): Promise<Result> {
   await ensureOffscreenDocument();
 
   const response = (await chrome.runtime.sendMessage({
@@ -80,6 +89,14 @@ export async function writeClipboardForPdf(text: string): Promise<void> {
   })) as OffscreenClipboardResponse | undefined;
 
   if (!response?.ok) {
-    throw new Error(response?.error ?? "offscreen clipboard write failed");
+    return{
+      ok: false,
+      message: "failed to write to clipboard",
+    }
+  }
+
+  return{
+    ok: true,
+    message: null,
   }
 }

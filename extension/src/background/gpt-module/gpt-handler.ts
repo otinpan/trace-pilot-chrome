@@ -7,6 +7,7 @@ import {
     RESPONSE_TYPE,
     PDFData,
     GPTData,
+    Result,
 } from "../../type";
 import { Handler } from "../handler";
 import { GPTThread } from "../../content/gpt-module/gpt-thread";
@@ -71,23 +72,35 @@ export class GPTHandler extends Handler{
         repoPath: string
     ):Promise<void>{
         
-        await this.onMenuClick(info,tab,repoPath);
+        const result=await this.onMenuClick(info,tab,repoPath);
+        this.showResult(result);
     }
 
     protected override async onMenuClick(
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab,
         repoPath: string
-    ):Promise<void>{
+    ):Promise<Result>{
         const tabId=await this.getValidTabId(info,tab);
         if(tabId==null||tabId<0){
             console.error("no valide tabId",tabId);
-            return;
+            return{
+                ok: false,
+                message: "no valide tabId",
+            }
         }
         const rawUrl=tab.url || "";
-        if(tabId==null)return;
+        if(tabId==null){
+            return{
+                ok: false,
+                message: "no valide tabId",
+            }
+        }
         if(!rawUrl){
-            return;
+            return{
+                ok: false,
+                message: "failed to get current url",
+            }
         }
 
         // イベントが発火したことを通知 → parentIdの取得
@@ -98,13 +111,19 @@ export class GPTHandler extends Handler{
             }).catch(()=>null as any);
         }catch(e){
             console.warn("sendMessage RESOLVE_LAST_TARGET failed:", e);
-            return;
+            return{
+                ok: false,
+                message: "failed to resolve target message",
+            }
         }
         
 
         if(!resolved?.ok){
             console.warn("No target:",resolved?.reason);
-            return;
+            return{
+                ok: false,
+                message: resolved?.reason ?? "no target",
+            }
         }
 
         // parentIdを渡す → threadPairを取得
@@ -117,12 +136,18 @@ export class GPTHandler extends Handler{
             });
         }catch(e){
             console.warn("sendMessage FORCE_RESPONSE_THREADPAIR failed:", e);
-            return;
+            return{
+                ok: false,
+                message: "failed to capture thread pair",
+            }
         }
         
         if(!result){
             console.warn("FORCE_RESPONSE_THREADPAIR returned empty:", result);
-            return;
+            return{
+                ok: false,
+                message: "thread pair response was empty",
+            }
         }
 
         console.log("succsess: clickmenu");
@@ -133,11 +158,10 @@ export class GPTHandler extends Handler{
         const plainText= await getSelectionFromAnyFrame(tabId);
         if(!plainText.trim()){
             console.warn("selection is empty");
-            return;
-        }
-
-        if(plainText===undefined){
-            return;
+            return{
+                ok: false,
+                message: "selection is empty",
+            }
         }
         
         this.lastPlainText=plainText;
@@ -165,13 +189,25 @@ export class GPTHandler extends Handler{
 
         console.log("message to native host: ",msg);
         let res=await this.sendToNativeHost(msg);
+        if(!res.ok){
+            return{
+                ok: false,
+                message: res.error,
+            }
+        }
         const metaHash=res.metaHash;
+        if(!metaHash){
+            return{
+                ok: false,
+                message: "failed to get hash from native-host",
+            }
+        }
         
          // クリップボードに貼る文字列
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}\n${plainText}`;
         
-        await writeClipboardViaContent(tab.id!, clipboardText);
+        return await writeClipboardViaContent(tab.id!, clipboardText);
     }
 
 }
@@ -202,6 +238,4 @@ export async function getSelectionFromAnyFrame(tabId: number): Promise<string> {
 }
 
 export default GPTHandler;
-
-
 

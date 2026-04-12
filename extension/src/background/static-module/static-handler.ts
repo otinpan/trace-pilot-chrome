@@ -5,6 +5,7 @@ import{
   MessageToNativeHost,
   TRACE_PILOT_MARKER,
   RESPONSE_TYPE,
+  Result,
 } from "../../type"
 import { Handler } from "../handler"
 import { writeClipboardViaContent } from "../pdf-module/pdf-handler";
@@ -82,18 +83,22 @@ export class StaticHandler extends Handler{
     tab: chrome.tabs.Tab,
     repoPath: string,
   ):Promise<void>{
-    await this.onMenuClick(info,tab,repoPath);
+    const result=await this.onMenuClick(info,tab,repoPath);
+    this.showResult(result);
   }
 
   protected override async onMenuClick(
     info: chrome.contextMenus.OnClickData,
     tab: chrome.tabs.Tab,
     repoPath: string
-  ):Promise<void>{
+  ):Promise<Result>{
     const tabId=await this.getValidTabId(info,tab);
     if(tabId==null||tabId<0){
       console.error("no valid tabId", tabId);
-      return;
+      return{
+        ok: false,
+        message: "no valid tabId",
+      }
     }
 
     const rawUrl= (info as any).frameUrl ||
@@ -102,12 +107,18 @@ export class StaticHandler extends Handler{
       (tab as any).pendingUrl ||
       "";
     if(!rawUrl){
-      return;
+      return{
+        ok: false,
+        message: "failed to get current url",
+      }
     }
 
     const plainText=info.selectionText;
     if(plainText===undefined){
-      return;
+      return{
+        ok: false,
+        message: "failed to capture selected text",
+      }
     }
     console.log("plain text: ",plainText);
 
@@ -121,7 +132,10 @@ export class StaticHandler extends Handler{
       mhtml_base64=arrayBufferToBase64(ab);
     }catch(err){
       console.error("failed to capture mhtml",err);
-      return;
+      return{
+        ok: false,
+        message: "failed to capture mhtml",
+      }
     }
 
     const msg:MessageToNativeHost={
@@ -137,12 +151,24 @@ export class StaticHandler extends Handler{
     }
 
     let res=await this.sendToNativeHost(msg);
+    if(!res.ok){
+      return{
+        ok: false,
+        message: res.error,
+      }
+    }
     const metaHash=res.metaHash;
+    if(!metaHash){
+      return{
+        ok: false,
+        message: "failed to get hash from native-host",
+      }
+    }
 
     const marker=`${TRACE_PILOT_MARKER} ${metaHash}`;
     const clipboardText=`${marker}\n${plainText}`;
     console.log("clipboard text: ",clipboardText);
 
-    await writeClipboardViaContent(tabId,clipboardText);
+    return await writeClipboardViaContent(tabId,clipboardText);
   }
 }

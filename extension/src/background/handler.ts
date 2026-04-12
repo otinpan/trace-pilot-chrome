@@ -1,10 +1,10 @@
 import{
     NATIVE_HOST_NAME,
-    MessageToNativeHost,
-    GetGitRepoMessage,
-    GetGitRepoResponse,
-    RESPONSE_TYPE,
+    NativeHostResponse,
 } from "../type";
+
+import { Result } from "../type";
+
 export abstract class Handler{
     private static installed=false;
     private static registry=new Map<string,Handler>();
@@ -21,12 +21,17 @@ export abstract class Handler{
 
     }
 
-    protected async sendToNativeHost(message:any):Promise<any>{
+    showResult(result: Result){
+
+    }
+
+    protected async sendToNativeHost(message:any):Promise<NativeHostResponse>{
         return new Promise((resolve,reject)=>{
             console.log("send message to native host (git): ",message);
-            chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res)=>{
+            chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res: NativeHostResponse | undefined)=>{
                 const err=chrome.runtime.lastError;
                 if(err)return reject(err.message||String(err));
+                if(!res)return reject("native host returned empty response");
                 console.log("success",res);
                 resolve(res);
             });
@@ -38,12 +43,12 @@ export abstract class Handler{
         chrome.contextMenus.update(this.menuId, { enabled }, () => void chrome.runtime.lastError);
     }
 
-    // クリックされたときの
+    // クリックされたとき
     protected abstract onMenuClick(
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab,
         repoPath:string
-    ):Promise<void>|void;
+    ):Promise<Result>;
 
     protected onClickMissingTab(
         info: chrome.contextMenus.OnClickData,

@@ -45,6 +45,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           msg as any,
           sender.tab?.id ?? null,
         );
+        googleSheetsHandler.showResult(response);
         sendResponse(response);
       })();
       return true;

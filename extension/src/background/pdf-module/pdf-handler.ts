@@ -5,8 +5,7 @@ import {
     MessageToNativeHost, 
     TRACE_PILOT_MARKER,
     RESPONSE_TYPE,
-    PDFData,
-    GPTData,
+    Result,
 } from "../../type";
 import { Handler } from "../handler";
 import { writeClipboardForPdf } from "../clipboard/offscreen-clipboard";
@@ -76,7 +75,8 @@ export class PdfHandler extends Handler {
         repoPath: string,
     ):Promise<void>{
         
-        await this.onMenuClick(info,tab,repoPath);
+        const result:Result=await this.onMenuClick(info,tab,repoPath);
+        this.showResult(result);
     }
 
     
@@ -85,11 +85,14 @@ export class PdfHandler extends Handler {
         info: chrome.contextMenus.OnClickData,
         tab: chrome.tabs.Tab,
         repoPath: string
-    ):Promise<void>{
+    ):Promise<Result>{
         const tabId=await this.getValidTabId(info,tab);
         if(tabId==null||tabId<0){
             console.error("no valide tabId",tabId);
-            return;
+            return{
+              ok: false,
+              message: "no valide tabId",
+            }
         }
 
         const rawUrl =
@@ -102,7 +105,10 @@ export class PdfHandler extends Handler {
 
         if(!rawUrl){
             console.error("No url found for PDF tab.");
-            return;
+            return{
+              ok: false,
+              message: "no url found for PDF tab",
+            }
         }
 
         const { url, isPdf } = resolvePdfUrl(rawUrl);
@@ -110,7 +116,10 @@ export class PdfHandler extends Handler {
         const plainText= info.selectionText;
         console.log("plainttext",plainText);
         if(plainText===undefined){
-            return;
+            return{
+              ok: false,
+              message: "failed to capture selected text",
+            }
         }
         this.lastPlainText=plainText;
 
@@ -130,13 +139,26 @@ export class PdfHandler extends Handler {
             repoPath,
         }
         let res=await this.sendToNativeHost(msg);
+        if(!res.ok){
+            return{
+              ok: false,
+              message: res.error,
+            }
+        }
         const metaHash=res.metaHash;
+        if(!metaHash){
+          return{
+            ok: false,
+            message: "failed to get hash from native-host",
+          }
+        }
 
         // クリップボードに貼る文字列
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}\n${plainText}`;
 
-        await writeClipboardForPdf(clipboardText);
+        const result:Result=await writeClipboardForPdf(clipboardText);
+        return result
     }
 }
 
@@ -211,7 +233,7 @@ async function focusTabAndWindow(tabId: number) {
 
 
 // background / service worker 側
-export async function writeClipboardViaContent(tabId: number, text: string) {
+export async function writeClipboardViaContent(tabId: number, text: string): Promise<Result> {
    await focusTabAndWindow(tabId);
 
     // content script にメッセージ送信
@@ -220,8 +242,15 @@ export async function writeClipboardViaContent(tabId: number, text: string) {
         text,
     });
 
-
     if (!res?.ok) {
-        throw new Error(res?.error ?? "clipboard write failed");
+        return{
+            ok: false,
+            message: res?.error ?? "clipboard write failed",
+        }
+    }
+
+    return{
+        ok: true,
+        message: null,
     }
 }

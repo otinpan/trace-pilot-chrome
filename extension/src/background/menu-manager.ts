@@ -5,12 +5,9 @@ import {
     NATIVE_HOST_NAME,
     RESPONSE_TYPE,
     GetGitRepoMessage,
-    GetGitRepoResponse,
-    MENU_ID_GOOGLE_SHEETS
+    MENU_ID_GOOGLE_SHEETS,
+    NativeHostResponse,
 } from "../type";
-import GPTHandler from "./gpt-module/gpt-handler";
-import { OtherHandler } from "./other-handler";
-import { PdfHandler } from "./pdf-module/pdf-handler";
 import { GoogleSheetsHandler } from "./google-sheets-module/google-sheets-handler";
 const CHILD_PREFIX_PDF="tp:repo:pdf:";
 const CHILD_PREFIX_GPT="tp:repo:gpt:";
@@ -129,18 +126,23 @@ export class MenuManager{
             data: null,
         };
 
-        let res=await this.sendToNativeHost(msg) as GetGitRepoResponse;
+        let res=await this.sendToNativeHost(msg);
         console.log("repositories: ",res);
 
-        return res.git_repo;
+        if(!res.ok){
+            throw new Error(res.error);
+        }
+
+        return res.git_repo ?? [];
     }
 
-    async sendToNativeHost(message:any):Promise<any>{
+    async sendToNativeHost(message:any):Promise<NativeHostResponse>{
         return new Promise((resolve,reject)=>{
             console.log("send message to native host (git): ",message);
-            chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res)=>{
+            chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME,message,(res: NativeHostResponse | undefined)=>{
                 const err=chrome.runtime.lastError;
                 if(err)return reject(err.message||String(err));
+                if(!res)return reject("native host returned empty response");
                 console.log("success",res);
                 resolve(res);
             });

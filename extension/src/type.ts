@@ -13,6 +13,11 @@ export const MENU_ID_STATIC="create_hash_and_store_STATIC";
 export const MENU_ID_GOOGLE_SHEETS="create_hash_and_store_GOOGLE_SHEETS";
 export const NATIVE_HOST_NAME="trace_pilot_host_chrome";
 
+export interface Result{
+  ok: boolean;
+  message: string|null;
+}
+
 export type TracePilotRequest={
     type: "trace-pilot";
 }
@@ -57,6 +62,19 @@ export interface GetGitRepoResponse{
   ok:true;
   git_repo: string[];
 }
+
+export interface NativeHostSuccessResponse {
+  ok: true;
+  metaHash?: string;
+  git_repo?: string[];
+}
+
+export interface NativeHostErrorResponse {
+  ok: false;
+  error: string;
+}
+
+export type NativeHostResponse = NativeHostSuccessResponse | NativeHostErrorResponse;
 
 export interface MetaHashMessage{
     meta_hash:string;

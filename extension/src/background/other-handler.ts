@@ -1,12 +1,7 @@
 import { 
     MENU_ID_OTER,
-    NATIVE_HOST_NAME,
     COMMANDS,GenericEvent,
-    MessageToNativeHost, 
-    TRACE_PILOT_MARKER,
-    RESPONSE_TYPE,
-    PDFData,
-    GPTData,
+    Result,
 } from "../type";
 import { Handler } from "./handler";
 
@@ -25,8 +20,12 @@ export class OtherHandler extends Handler{
 
     protected override async onMenuClick(
         info: chrome.contextMenus.OnClickData,
-        tab: chrome.tabs.Tab
-    ):Promise<void>{
-        return;
+        tab: chrome.tabs.Tab,
+        repoPath: string
+    ):Promise<Result>{
+        return{
+            ok: true,
+            message: null,
+        };
     }
 }

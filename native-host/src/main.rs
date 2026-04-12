@@ -1,5 +1,5 @@
 use std::io::{self, Read, Write};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use serde::{Deserialize,Serialize};
@@ -16,22 +16,61 @@ const MAX_INPUT_BYTES: usize=64*1024*1024;
 const MAX_OUTPUT_BYTES: usize=1*1024*1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Response {
-    metaHash: String,
+struct NativeHostResponse {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    metaHash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    git_repo: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct GetGitResponse{
-    ok:bool,
-    git_repo: Vec<String>,
+impl NativeHostResponse {
+    fn meta_hash(meta_hash: String) -> Self {
+        Self {
+            ok: true,
+            metaHash: Some(meta_hash),
+            git_repo: None,
+            error: None,
+        }
+    }
+
+    fn git_repos(repos: Vec<String>) -> Self {
+        Self {
+            ok: true,
+            metaHash: None,
+            git_repo: Some(repos),
+            error: None,
+        }
+    }
+
+    fn error(message: String) -> Self {
+        Self {
+            ok: false,
+            metaHash: None,
+            git_repo: None,
+            error: Some(message),
+        }
+    }
 }
 
-fn main()->Result<()>{
-    let rt=tokio::runtime::Runtime::new()?;
-    rt.block_on(async_main())
+fn main() -> Result<()> {
+    let rt = tokio::runtime::Runtime::new()?;
+    let response = match rt.block_on(async_main()) {
+        Ok(response) => response,
+        Err(error) => {
+            eprintln!("native host error: {error:#}");
+            NativeHostResponse::error(format!("{error:#}"))
+        }
+    };
+
+    let payload = serde_json::to_vec(&response).context("failed to serialize final response")?;
+    write_output_bytes(&payload).context("failed to write final response")?;
+    Ok(())
 }
 
-async fn async_main() -> Result<()> {
+async fn async_main() -> Result<NativeHostResponse> {
     let input = read_input().context("read_input failed")?;
 
     eprintln!("raw input bytes = {}", input.len());
@@ -42,55 +81,36 @@ async fn async_main() -> Result<()> {
         .context("failed to parse Request JSON")?;
 
     
-    let meta_hash=match req{
+    match req{
         // .gitが含まれるフォルダを返す
         types::RequestFromChrome::GetGit { .. } => {
             let repos=get_git_repos().await?;
-
-            let resp=GetGitResponse{
-                ok:true,
-                git_repo:repos,
-            };
-
-            let resp_json=serde_json::to_vec(&resp)?;
-            write_output_bytes(&resp_json)?;
-            return Ok(());
+            Ok(NativeHostResponse::git_repos(repos))
         }
-        types::RequestFromChrome::ChromePDF{url,plain_text, data, repoPath}=>{
+        types::RequestFromChrome::ChromePDF{url,plain_text, data: _, repoPath}=>{
             let meta_hash=hash_and_store_pdf(url,plain_text,true,repoPath).await?;
-            let resp = Response { metaHash: meta_hash };
-            let resp_json = serde_json::to_vec(&resp).context("failed to serialize response")?;
-            eprintln!("resp {}",resp.metaHash);
-            write_output_bytes(&resp_json).context("write_output failed")?;
+            eprintln!("resp {}", meta_hash);
+            Ok(NativeHostResponse::meta_hash(meta_hash))
         }
         types::RequestFromChrome::ChatGpt{url,plain_text,data,repoPath}=>{
             let meta_hash=hash_and_store_gpt(url,plain_text,data,repoPath).await?;
-            let resp = Response { metaHash: meta_hash };
-            let resp_json = serde_json::to_vec(&resp).context("failed to serialize response")?;
-            eprintln!("resp {}",resp.metaHash);
-            write_output_bytes(&resp_json).context("write_output failed")?;
+            eprintln!("resp {}", meta_hash);
+            Ok(NativeHostResponse::meta_hash(meta_hash))
         }
         types::RequestFromChrome::ChromeStatic {url,plain_text,data,repoPath}=>{
             let meta_hash=hash_and_store_static(url,plain_text,data,repoPath).await?;
-            let resp=Response{metaHash: meta_hash};
-            let resp_json=serde_json::to_vec(&resp).context("failed to serialize response")?;
-            eprintln!("resp {}",resp.metaHash);
-            write_output_bytes(&resp_json).context("write_output failed")?;
+            eprintln!("resp {}", meta_hash);
+            Ok(NativeHostResponse::meta_hash(meta_hash))
         }
         types::RequestFromChrome::GoogleSheet {url,plain_text,data,repoPath}=>{
             let meta_hash=hash_and_store_google_sheets(url,plain_text,data,repoPath).await?;
-            let resp=Response{metaHash: meta_hash};
-            let resp_json=serde_json::to_vec(&resp).context("failed to serialize response")?;
-            eprintln!("resp {}",resp.metaHash);
-            write_output_bytes(&resp_json).context("write_output failed")?;
+            eprintln!("resp {}", meta_hash);
+            Ok(NativeHostResponse::meta_hash(meta_hash))
         }
        types::RequestFromChrome::Other { .. } => {
-            anyhow::bail!("expected CHROME_PDF or CHAT_GPT request")
+            anyhow::bail!("expected CHROME_PDF, CHAT_GPT, CHROME_STATIC, GOOGLE_SHEETS, or GET_GIT request")
         }
-    };
-
-
-    Ok(())
+    }
 }
 
 

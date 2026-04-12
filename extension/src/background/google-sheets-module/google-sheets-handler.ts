@@ -5,6 +5,7 @@ import{
   MessageToNativeHost,
   RESPONSE_TYPE,
   TRACE_PILOT_MARKER,
+  Result,
 } from "../../type";
 import { Handler } from "../handler";
 import { writeClipboardViaContent } from "../pdf-module/pdf-handler";
@@ -40,21 +41,21 @@ export class GoogleSheetsHandler extends Handler{
     plainText?: unknown;
     selectedArea?: unknown;
     cellSnapshot?: unknown;
-  }, tabId: number | null){
+  }, tabId: number | null):Promise<Result>{
     if(typeof msg.url !== "string" || !msg.url){
-      return { ok: false, error: "url is required" };
+      return { ok: false, message: "url is required" };
     }
 
     if(typeof msg.repoPath !== "string" || !msg.repoPath){
-      return { ok: false, error: "repoPath is required" };
+      return { ok: false, message: "repoPath is required" };
     }
 
     if(typeof msg.plainText !== "string"){
-      return { ok: false, error: "plainText must be a string" };
+      return { ok: false, message: "plainText must be a string" };
     }
 
     if(tabId == null || tabId < 0){
-      return { ok: false, error: "tabId is required" };
+      return { ok: false, message: "tabId is required" };
     }
 
     const plainText=msg.plainText;
@@ -74,13 +75,19 @@ export class GoogleSheetsHandler extends Handler{
 
     try{
       const response = await this.sendToNativeHost(nativeMessage);
+      if(!response.ok){
+        return { ok: false, message: response.error };
+      }
       const metaHash = response.metaHash;
+      if(!metaHash){
+        return { ok: false, message: "native host response did not include metaHash" };
+      }
       const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
       const clipboardText = `${marker}\n${plainText}`;
-      await writeClipboardViaContent(tabId, clipboardText);
-      return { ok: true, response };
+      const result=await writeClipboardViaContent(tabId, clipboardText);
+      return result;
     }catch(error){
-      return { ok: false, error: String(error) };
+      return { ok: false, message: String(error) };
     }
   }
 
@@ -115,37 +122,10 @@ export class GoogleSheetsHandler extends Handler{
     info: chrome.contextMenus.OnClickData,
     tab: chrome.tabs.Tab,
     repoPath: string
-  ):Promise<void>{
-    const tabId=await this.getValidTabId(info,tab);
-    if(tabId==null||tabId<0){
-      console.error("no valid tabId",tabId);
-      return;
+  ):Promise<Result>{
+    return{
+      ok: true,
+      message: null,
     }
-
-    const rawUrl=tab.url || "";
-    if(tabId==null)return;
-    if(!rawUrl){
-      return;
-    }
-
-    let result:any;
-    try{
-      // google-sheets-threadからdom情報を取得
-      result=await chrome.tabs.sendMessage(tabId,{
-        kind: "FORCE_RESPONSE_SHEETS_DOM",
-        url: rawUrl,
-      })
-    }catch(e){
-      console.warn("sendMessage FORCE_RESPONSE_SHEETS_DOM returned empty", result);
-      return;
-    }
-
-    console.log("result:", result);
-    const plainText=info.selectionText;
-    if(plainText===undefined){
-      return;
-    }
-
-    // TODO:  NativeHostにmessageを送る
   }
 }
