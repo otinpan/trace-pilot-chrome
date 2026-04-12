@@ -108,9 +108,58 @@ var init_handler = __esm({
       static {
         this.registry = /* @__PURE__ */ new Map();
       }
+      static {
+        this.badgeTimers = /* @__PURE__ */ new Map();
+      }
+      static {
+        this.globalBadgeTimer = null;
+      }
       init() {
         if (_Handler.installed) return;
         _Handler.installed = true;
+      }
+      async showResult(result, tabId) {
+        const text = result.ok ? "OK" : "NG";
+        const color = result.ok ? "#1f9d55" : "#d93025";
+        const title = result.ok ? "trace-pilot: success" : `trace-pilot: ${result.message ?? "failed"}`;
+        const validTabId = typeof tabId === "number" && tabId >= 0 ? tabId : void 0;
+        const details = validTabId != null ? { tabId: validTabId } : {};
+        await chrome.action.setBadgeText({
+          text,
+          ...details
+        });
+        await chrome.action.setBadgeBackgroundColor({
+          color,
+          ...details
+        });
+        await chrome.action.setTitle({
+          title,
+          ...details
+        });
+        if (validTabId == null) {
+          if (_Handler.globalBadgeTimer != null) {
+            clearTimeout(_Handler.globalBadgeTimer);
+          }
+          _Handler.globalBadgeTimer = globalThis.setTimeout(() => {
+            void chrome.action.setBadgeText({
+              text: ""
+            });
+            _Handler.globalBadgeTimer = null;
+          }, 3e3);
+          return;
+        }
+        const prevTimer = _Handler.badgeTimers.get(validTabId);
+        if (prevTimer != null) {
+          clearTimeout(prevTimer);
+        }
+        const timer = globalThis.setTimeout(() => {
+          void chrome.action.setBadgeText({
+            text: "",
+            tabId: validTabId
+          });
+          _Handler.badgeTimers.delete(validTabId);
+        }, 3e3);
+        _Handler.badgeTimers.set(validTabId, timer);
       }
       async sendToNativeHost(message) {
         return new Promise((resolve, reject) => {
@@ -118,6 +167,7 @@ var init_handler = __esm({
           chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
             const err = chrome.runtime.lastError;
             if (err) return reject(err.message || String(err));
+            if (!res) return reject("native host returned empty response");
             console.log("success", res);
             resolve(res);
           });
@@ -131,6 +181,73 @@ var init_handler = __esm({
         console.error("Menu clicked but tab is missing:", info);
       }
     };
+  }
+});
+
+// background/clipboard/offscreen-clipboard.ts
+async function hasOffscreenDocument() {
+  const runtime = chrome.runtime;
+  if (typeof runtime.getContexts === "function") {
+    const contexts = await runtime.getContexts({
+      contextTypes: ["OFFSCREEN_DOCUMENT"],
+      documentUrls: [chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)]
+    });
+    return contexts.length > 0;
+  }
+  const serviceWorkerClients = globalThis.clients;
+  if (!serviceWorkerClients) {
+    return false;
+  }
+  const matchedClients = await serviceWorkerClients.matchAll();
+  return matchedClients.some(
+    (client) => client.url === chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)
+  );
+}
+async function ensureOffscreenDocument() {
+  if (await hasOffscreenDocument()) {
+    return;
+  }
+  if (!creatingOffscreenDocument) {
+    creatingOffscreenDocument = (async () => {
+      const offscreen = chrome.offscreen;
+      if (!offscreen) {
+        throw new Error("chrome.offscreen is not available");
+      }
+      await offscreen.createDocument({
+        url: OFFSCREEN_DOCUMENT_PATH,
+        reasons: ["CLIPBOARD"],
+        justification: "Write clipboard text for PDF tabs"
+      });
+    })().finally(() => {
+      creatingOffscreenDocument = null;
+    });
+  }
+  await creatingOffscreenDocument;
+}
+async function writeClipboardForPdf(text) {
+  await ensureOffscreenDocument();
+  const response = await chrome.runtime.sendMessage({
+    kind: OFFSCREEN_WRITE_KIND,
+    text
+  });
+  if (!response?.ok) {
+    return {
+      ok: false,
+      message: "failed to write to clipboard"
+    };
+  }
+  return {
+    ok: true,
+    message: null
+  };
+}
+var OFFSCREEN_DOCUMENT_PATH, OFFSCREEN_WRITE_KIND, creatingOffscreenDocument;
+var init_offscreen_clipboard = __esm({
+  "background/clipboard/offscreen-clipboard.ts"() {
+    "use strict";
+    OFFSCREEN_DOCUMENT_PATH = "dist/offscreen/offscreen.html";
+    OFFSCREEN_WRITE_KIND = "TRACE_PILOT_OFFSCREEN_WRITE_CLIPBOARD";
+    creatingOffscreenDocument = null;
   }
 });
 
@@ -186,8 +303,15 @@ async function writeClipboardViaContent(tabId, text) {
     text
   });
   if (!res?.ok) {
-    throw new Error(res?.error ?? "clipboard write failed");
+    return {
+      ok: false,
+      message: res?.error ?? "clipboard write failed"
+    };
   }
+  return {
+    ok: true,
+    message: null
+  };
 }
 var PdfHandler;
 var init_pdf_handler = __esm({
@@ -195,6 +319,7 @@ var init_pdf_handler = __esm({
     "use strict";
     init_type();
     init_handler();
+    init_offscreen_clipboard();
     PdfHandler = class extends Handler {
       constructor() {
         super(MENU_ID_PDF);
@@ -231,25 +356,35 @@ var init_pdf_handler = __esm({
         return null;
       }
       async handleRepoClick(info, tab, repoPath) {
-        await this.onMenuClick(info, tab, repoPath);
+        const result = await this.onMenuClick(info, tab, repoPath);
+        await this.showResult(result, tab.id);
       }
       // クリックされたとき
       async onMenuClick(info, tab, repoPath) {
         const tabId = await this.getValidTabId(info, tab);
         if (tabId == null || tabId < 0) {
           console.error("no valide tabId", tabId);
-          return;
+          return {
+            ok: false,
+            message: "no valide tabId"
+          };
         }
         const rawUrl = info.frameUrl || info.pageUrl || tab.url || tab.pendingUrl || this.lastPdf?.url || "";
         if (!rawUrl) {
           console.error("No url found for PDF tab.");
-          return;
+          return {
+            ok: false,
+            message: "no url found for PDF tab"
+          };
         }
         const { url, isPdf } = resolvePdfUrl(rawUrl);
         const plainText = info.selectionText;
         console.log("plainttext", plainText);
         if (plainText === void 0) {
-          return;
+          return {
+            ok: false,
+            message: "failed to capture selected text"
+          };
         }
         this.lastPlainText = plainText;
         console.log("selected text: ", plainText);
@@ -265,11 +400,24 @@ var init_pdf_handler = __esm({
           repoPath
         };
         let res = await this.sendToNativeHost(msg);
+        if (!res.ok) {
+          return {
+            ok: false,
+            message: res.error
+          };
+        }
         const metaHash = res.metaHash;
+        if (!metaHash) {
+          return {
+            ok: false,
+            message: "failed to get hash from native-host"
+          };
+        }
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}
 ${plainText}`;
-        await writeClipboardViaContent(tabId, clipboardText);
+        const result = await writeClipboardForPdf(clipboardText);
+        return result;
       }
     };
   }
@@ -337,18 +485,30 @@ var init_gpt_handler = __esm({
         return null;
       }
       async handleRepoClick(info, tab, repoPath) {
-        await this.onMenuClick(info, tab, repoPath);
+        const result = await this.onMenuClick(info, tab, repoPath);
+        await this.showResult(result, tab.id);
       }
       async onMenuClick(info, tab, repoPath) {
         const tabId = await this.getValidTabId(info, tab);
         if (tabId == null || tabId < 0) {
           console.error("no valide tabId", tabId);
-          return;
+          return {
+            ok: false,
+            message: "no valide tabId"
+          };
         }
         const rawUrl = tab.url || "";
-        if (tabId == null) return;
+        if (tabId == null) {
+          return {
+            ok: false,
+            message: "no valide tabId"
+          };
+        }
         if (!rawUrl) {
-          return;
+          return {
+            ok: false,
+            message: "failed to get current url"
+          };
         }
         let resolved;
         try {
@@ -357,11 +517,17 @@ var init_gpt_handler = __esm({
           }).catch(() => null);
         } catch (e) {
           console.warn("sendMessage RESOLVE_LAST_TARGET failed:", e);
-          return;
+          return {
+            ok: false,
+            message: "failed to resolve target message"
+          };
         }
         if (!resolved?.ok) {
           console.warn("No target:", resolved?.reason);
-          return;
+          return {
+            ok: false,
+            message: resolved?.reason ?? "no target"
+          };
         }
         let result;
         try {
@@ -372,11 +538,17 @@ var init_gpt_handler = __esm({
           });
         } catch (e) {
           console.warn("sendMessage FORCE_RESPONSE_THREADPAIR failed:", e);
-          return;
+          return {
+            ok: false,
+            message: "failed to capture thread pair"
+          };
         }
         if (!result) {
           console.warn("FORCE_RESPONSE_THREADPAIR returned empty:", result);
-          return;
+          return {
+            ok: false,
+            message: "thread pair response was empty"
+          };
         }
         console.log("succsess: clickmenu");
         console.log(resolved.parentId);
@@ -384,10 +556,10 @@ var init_gpt_handler = __esm({
         const plainText = await getSelectionFromAnyFrame(tabId);
         if (!plainText.trim()) {
           console.warn("selection is empty");
-          return;
-        }
-        if (plainText === void 0) {
-          return;
+          return {
+            ok: false,
+            message: "selection is empty"
+          };
         }
         this.lastPlainText = plainText;
         const threadPair = result.result;
@@ -407,11 +579,23 @@ var init_gpt_handler = __esm({
         };
         console.log("message to native host: ", msg);
         let res = await this.sendToNativeHost(msg);
+        if (!res.ok) {
+          return {
+            ok: false,
+            message: res.error
+          };
+        }
         const metaHash = res.metaHash;
+        if (!metaHash) {
+          return {
+            ok: false,
+            message: "failed to get hash from native-host"
+          };
+        }
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}
 ${plainText}`;
-        await writeClipboardViaContent(tab.id, clipboardText);
+        return await writeClipboardViaContent(tab.id, clipboardText);
       }
     };
     gpt_handler_default = GPTHandler;
@@ -434,8 +618,11 @@ var init_other_handler = __esm({
           this.setEnabled(false);
         }
       }
-      async onMenuClick(info, tab) {
-        return;
+      async onMenuClick(info, tab, repoPath) {
+        return {
+          ok: true,
+          message: null
+        };
       }
     };
   }
@@ -541,7 +728,10 @@ var init_menu_manager = __esm({
         };
         let res = await this.sendToNativeHost(msg);
         console.log("repositories: ", res);
-        return res.git_repo;
+        if (!res.ok) {
+          throw new Error(res.error);
+        }
+        return res.git_repo ?? [];
       }
       async sendToNativeHost(message) {
         return new Promise((resolve, reject) => {
@@ -549,6 +739,7 @@ var init_menu_manager = __esm({
           chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, message, (res) => {
             const err = chrome.runtime.lastError;
             if (err) return reject(err.message || String(err));
+            if (!res) return reject("native host returned empty response");
             console.log("success", res);
             resolve(res);
           });
@@ -668,16 +859,16 @@ var init_google_sheets_handler = __esm({
       }
       async handleContentMessage(msg, tabId) {
         if (typeof msg.url !== "string" || !msg.url) {
-          return { ok: false, error: "url is required" };
+          return { ok: false, message: "url is required" };
         }
         if (typeof msg.repoPath !== "string" || !msg.repoPath) {
-          return { ok: false, error: "repoPath is required" };
+          return { ok: false, message: "repoPath is required" };
         }
         if (typeof msg.plainText !== "string") {
-          return { ok: false, error: "plainText must be a string" };
+          return { ok: false, message: "plainText must be a string" };
         }
         if (tabId == null || tabId < 0) {
-          return { ok: false, error: "tabId is required" };
+          return { ok: false, message: "tabId is required" };
         }
         const plainText = msg.plainText;
         const nativeMessage = {
@@ -693,14 +884,20 @@ var init_google_sheets_handler = __esm({
         console.log("message to native message: ", nativeMessage);
         try {
           const response = await this.sendToNativeHost(nativeMessage);
+          if (!response.ok) {
+            return { ok: false, message: response.error };
+          }
           const metaHash = response.metaHash;
+          if (!metaHash) {
+            return { ok: false, message: "native host response did not include metaHash" };
+          }
           const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
           const clipboardText = `${marker}
 ${plainText}`;
-          await writeClipboardViaContent(tabId, clipboardText);
-          return { ok: true, response };
+          const result = await writeClipboardViaContent(tabId, clipboardText);
+          return result;
         } catch (error) {
-          return { ok: false, error: String(error) };
+          return { ok: false, message: String(error) };
         }
       }
       async getValidTabId(info, tab) {
@@ -719,31 +916,10 @@ ${plainText}`;
         await this.onMenuClick(info, tab, repoPath);
       }
       async onMenuClick(info, tab, repoPath) {
-        const tabId = await this.getValidTabId(info, tab);
-        if (tabId == null || tabId < 0) {
-          console.error("no valid tabId", tabId);
-          return;
-        }
-        const rawUrl = tab.url || "";
-        if (tabId == null) return;
-        if (!rawUrl) {
-          return;
-        }
-        let result;
-        try {
-          result = await chrome.tabs.sendMessage(tabId, {
-            kind: "FORCE_RESPONSE_SHEETS_DOM",
-            url: rawUrl
-          });
-        } catch (e) {
-          console.warn("sendMessage FORCE_RESPONSE_SHEETS_DOM returned empty", result);
-          return;
-        }
-        console.log("result:", result);
-        const plainText = info.selectionText;
-        if (plainText === void 0) {
-          return;
-        }
+        return {
+          ok: true,
+          message: null
+        };
       }
     };
   }
@@ -811,21 +987,31 @@ var init_static_handler = __esm({
         return null;
       }
       async handleRepoClick(info, tab, repoPath) {
-        await this.onMenuClick(info, tab, repoPath);
+        const result = await this.onMenuClick(info, tab, repoPath);
+        await this.showResult(result, tab.id);
       }
       async onMenuClick(info, tab, repoPath) {
         const tabId = await this.getValidTabId(info, tab);
         if (tabId == null || tabId < 0) {
           console.error("no valid tabId", tabId);
-          return;
+          return {
+            ok: false,
+            message: "no valid tabId"
+          };
         }
         const rawUrl = info.frameUrl || info.pageUrl || tab.url || tab.pendingUrl || "";
         if (!rawUrl) {
-          return;
+          return {
+            ok: false,
+            message: "failed to get current url"
+          };
         }
         const plainText = info.selectionText;
         if (plainText === void 0) {
-          return;
+          return {
+            ok: false,
+            message: "failed to capture selected text"
+          };
         }
         console.log("plain text: ", plainText);
         let mhtml_base64;
@@ -835,7 +1021,10 @@ var init_static_handler = __esm({
           mhtml_base64 = arrayBufferToBase64(ab);
         } catch (err) {
           console.error("failed to capture mhtml", err);
-          return;
+          return {
+            ok: false,
+            message: "failed to capture mhtml"
+          };
         }
         const msg = {
           type: "CHROME_STATIC" /* CHROME_STATIC */,
@@ -849,12 +1038,24 @@ var init_static_handler = __esm({
           repoPath
         };
         let res = await this.sendToNativeHost(msg);
+        if (!res.ok) {
+          return {
+            ok: false,
+            message: res.error
+          };
+        }
         const metaHash = res.metaHash;
+        if (!metaHash) {
+          return {
+            ok: false,
+            message: "failed to get hash from native-host"
+          };
+        }
         const marker = `${TRACE_PILOT_MARKER} ${metaHash}`;
         const clipboardText = `${marker}
 ${plainText}`;
         console.log("clipboard text: ", clipboardText);
-        await writeClipboardViaContent(tabId, clipboardText);
+        return await writeClipboardViaContent(tabId, clipboardText);
       }
     };
   }
@@ -899,6 +1100,7 @@ var require_background = __commonJS({
             msg,
             sender.tab?.id ?? null
           );
+          await googleSheetsHandler.showResult(response, sender.tab?.id);
           sendResponse(response);
         })();
         return true;

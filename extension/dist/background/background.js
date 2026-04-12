@@ -108,11 +108,58 @@ var init_handler = __esm({
       static {
         this.registry = /* @__PURE__ */ new Map();
       }
+      static {
+        this.badgeTimers = /* @__PURE__ */ new Map();
+      }
+      static {
+        this.globalBadgeTimer = null;
+      }
       init() {
         if (_Handler.installed) return;
         _Handler.installed = true;
       }
-      showResult(result) {
+      async showResult(result, tabId) {
+        const text = result.ok ? "OK" : "NG";
+        const color = result.ok ? "#1f9d55" : "#d93025";
+        const title = result.ok ? "trace-pilot: success" : `trace-pilot: ${result.message ?? "failed"}`;
+        const validTabId = typeof tabId === "number" && tabId >= 0 ? tabId : void 0;
+        const details = validTabId != null ? { tabId: validTabId } : {};
+        await chrome.action.setBadgeText({
+          text,
+          ...details
+        });
+        await chrome.action.setBadgeBackgroundColor({
+          color,
+          ...details
+        });
+        await chrome.action.setTitle({
+          title,
+          ...details
+        });
+        if (validTabId == null) {
+          if (_Handler.globalBadgeTimer != null) {
+            clearTimeout(_Handler.globalBadgeTimer);
+          }
+          _Handler.globalBadgeTimer = globalThis.setTimeout(() => {
+            void chrome.action.setBadgeText({
+              text: ""
+            });
+            _Handler.globalBadgeTimer = null;
+          }, 3e3);
+          return;
+        }
+        const prevTimer = _Handler.badgeTimers.get(validTabId);
+        if (prevTimer != null) {
+          clearTimeout(prevTimer);
+        }
+        const timer = globalThis.setTimeout(() => {
+          void chrome.action.setBadgeText({
+            text: "",
+            tabId: validTabId
+          });
+          _Handler.badgeTimers.delete(validTabId);
+        }, 3e3);
+        _Handler.badgeTimers.set(validTabId, timer);
       }
       async sendToNativeHost(message) {
         return new Promise((resolve, reject) => {
@@ -310,7 +357,7 @@ var init_pdf_handler = __esm({
       }
       async handleRepoClick(info, tab, repoPath) {
         const result = await this.onMenuClick(info, tab, repoPath);
-        this.showResult(result);
+        await this.showResult(result, tab.id);
       }
       // クリックされたとき
       async onMenuClick(info, tab, repoPath) {
@@ -439,7 +486,7 @@ var init_gpt_handler = __esm({
       }
       async handleRepoClick(info, tab, repoPath) {
         const result = await this.onMenuClick(info, tab, repoPath);
-        this.showResult(result);
+        await this.showResult(result, tab.id);
       }
       async onMenuClick(info, tab, repoPath) {
         const tabId = await this.getValidTabId(info, tab);
@@ -941,7 +988,7 @@ var init_static_handler = __esm({
       }
       async handleRepoClick(info, tab, repoPath) {
         const result = await this.onMenuClick(info, tab, repoPath);
-        this.showResult(result);
+        await this.showResult(result, tab.id);
       }
       async onMenuClick(info, tab, repoPath) {
         const tabId = await this.getValidTabId(info, tab);
@@ -1053,7 +1100,7 @@ var require_background = __commonJS({
             msg,
             sender.tab?.id ?? null
           );
-          googleSheetsHandler.showResult(response);
+          await googleSheetsHandler.showResult(response, sender.tab?.id);
           sendResponse(response);
         })();
         return true;

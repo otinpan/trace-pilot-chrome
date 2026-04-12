@@ -76,7 +76,7 @@ export class PdfHandler extends Handler {
     ):Promise<void>{
         
         const result:Result=await this.onMenuClick(info,tab,repoPath);
-        this.showResult(result);
+        await this.showResult(result, tab.id);
     }
 
     

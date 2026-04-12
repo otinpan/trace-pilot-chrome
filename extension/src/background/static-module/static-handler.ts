@@ -84,7 +84,7 @@ export class StaticHandler extends Handler{
     repoPath: string,
   ):Promise<void>{
     const result=await this.onMenuClick(info,tab,repoPath);
-    this.showResult(result);
+    await this.showResult(result, tab.id);
   }
 
   protected override async onMenuClick(

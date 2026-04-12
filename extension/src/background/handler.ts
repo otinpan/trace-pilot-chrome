@@ -8,6 +8,8 @@ import { Result } from "../type";
 export abstract class Handler{
     private static installed=false;
     private static registry=new Map<string,Handler>();
+    private static badgeTimers=new Map<number, ReturnType<typeof globalThis.setTimeout>>();
+    private static globalBadgeTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
     constructor(
         protected readonly menuId: string,
     ){
@@ -21,8 +23,58 @@ export abstract class Handler{
 
     }
 
-    showResult(result: Result){
+    async showResult(result: Result, tabId?: number): Promise<void>{
+        const text=result.ok ? "OK" : "NG";
+        const color=result.ok ? "#1f9d55" : "#d93025";
+        const title=result.ok
+            ? "trace-pilot: success"
+            : `trace-pilot: ${result.message ?? "failed"}`;
+        const validTabId=typeof tabId === "number" && tabId >= 0
+            ? tabId
+            : undefined;
+        const details=validTabId != null ? {tabId: validTabId} : {};
 
+        await chrome.action.setBadgeText({
+            text,
+            ...details,
+        });
+        await chrome.action.setBadgeBackgroundColor({
+            color,
+            ...details,
+        });
+        await chrome.action.setTitle({
+            title,
+            ...details,
+        });
+
+        if(validTabId == null){
+            if(Handler.globalBadgeTimer != null){
+                clearTimeout(Handler.globalBadgeTimer);
+            }
+
+            Handler.globalBadgeTimer=globalThis.setTimeout(() => {
+                void chrome.action.setBadgeText({
+                    text: "",
+                });
+                Handler.globalBadgeTimer = null;
+            }, 3000);
+            return;
+        }
+
+        const prevTimer=Handler.badgeTimers.get(validTabId);
+        if(prevTimer != null){
+            clearTimeout(prevTimer);
+        }
+
+        const timer=globalThis.setTimeout(() => {
+            void chrome.action.setBadgeText({
+                text: "",
+                tabId: validTabId,
+            });
+            Handler.badgeTimers.delete(validTabId);
+        }, 3000);
+
+        Handler.badgeTimers.set(validTabId, timer);
     }
 
     protected async sendToNativeHost(message:any):Promise<NativeHostResponse>{
